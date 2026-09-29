@@ -1,0 +1,6 @@
+parameters:
+    phpstanCwe:
+        minProbability: 0
+
+parametersSchema:
+    phpstanCwe: structure([minProbability: int()])

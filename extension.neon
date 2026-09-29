@@ -1,0 +1,4 @@
+includes:
+    - config.neon
+    - rules/cwe79.neon
+    - rules/cwe89.neon

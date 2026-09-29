@@ -1,0 +1,7 @@
+services:
+    -
+        class: Perturbatio\PhpstanCwe\Rules\Cwe89Rule
+        arguments:
+            minProbability: %phpstanCwe.minProbability%
+        tags:
+            - phpstan.rules.rule

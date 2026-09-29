@@ -1,0 +1,29 @@
+{
+    "name": "perturbatio/phpstan-cwe",
+    "description": "Identify *potential* CWE (Common Weakness Enumeration) vulnerabilities in your application",
+    "type": "library",
+    "license": "MIT",
+    "autoload": {
+        "psr-4": {
+            "Perturbatio\\PhpstanCwe\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "Kris Kelly",
+            "email": "me@perturbatio.com"
+        }
+    ],
+    "require-dev": {
+        "pestphp/pest": "5.*"
+    },
+    "config": {
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        }
+    },
+    "require": {
+        "phpstan/phpstan": "^2.1",
+        "php": "^8.1"
+    }
+}

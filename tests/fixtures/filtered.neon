@@ -1,0 +1,6 @@
+includes:
+    - ../../extension.neon
+
+parameters:
+    phpstanCwe:
+        minProbability: 81 # No report: Both rules have a score of 80.
