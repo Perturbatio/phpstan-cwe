@@ -25,6 +25,23 @@ It does not follow variables to their source. It can report a safe value
 that is deliberately trusted or already escaped. It cannot check each HTML
 output context. Review each report before you change a template.
 
+To ignore one raw echo, put a Blade comment immediately before it. Use
+PHPStan's error identifier. You can add a reason in parentheses:
+
+```blade
+{{-- @phpstan-ignore phpstanCwe.cwe79 (This text comes from a trusted source.) --}}
+{!! $trustedHtml !!}
+{!! $otherHtml !!} {{-- This raw echo still gets a report. --}}
+```
+
+The comment can also be on the same line before the raw echo. Only spaces
+can separate the comment and the echo on that line. If they are on two lines,
+only spaces and one line break can separate them. A blank line or other
+template code stops the ignore. An ignore without a matching raw echo gets
+an error with the identifier `phpstanCwe.ignoreUnmatched`. Blade comments
+do not use PHPStan's built-in PHP comment parser. This rule applies the
+same identifier form only to Blade raw echoes.
+
 The rule scans views when PHPStan analyzes at least one PHP file. Use
 `cwe79-blade.neon` to run only this rule. Use the `bladeDirectories`
 parameter to set other view directories. Relative paths start at the

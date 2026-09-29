@@ -9,10 +9,24 @@ it('finds raw Blade values and keeps template line numbers', function (): void {
     $findings = (new BladeTemplateScanner())->scan([$directory]);
 
     expect($findings)->toHaveCount(4)
-        ->and($findings)->toContain(['file' => $directory.'/home.blade.php', 'line' => 3])
-        ->and($findings)->toContain(['file' => $directory.'/home.blade.php', 'line' => 9])
-        ->and($findings)->toContain(['file' => $directory.'/home.blade.php', 'line' => 12])
-        ->and($findings)->toContain(['file' => $directory.'/parts/item.blade.php', 'line' => 1]);
+        ->and($findings)->toContain(['file' => $directory.'/home.blade.php', 'line' => 3, 'type' => 'rawEcho'])
+        ->and($findings)->toContain(['file' => $directory.'/home.blade.php', 'line' => 9, 'type' => 'rawEcho'])
+        ->and($findings)->toContain(['file' => $directory.'/home.blade.php', 'line' => 12, 'type' => 'rawEcho'])
+        ->and($findings)->toContain(['file' => $directory.'/parts/item.blade.php', 'line' => 1, 'type' => 'rawEcho']);
+});
+
+it('ignores only the raw echo next to a matching Blade comment', function (): void {
+    $file = __DIR__ . '/blade-ignores/ignored.blade.php';
+    $findings = (new BladeTemplateScanner())->scan([dirname($file)]);
+    $linesByType = [];
+
+    foreach ($findings as $finding) {
+        expect($finding['file'])->toBe($file);
+        $linesByType[$finding['type']][] = $finding['line'];
+    }
+
+    expect($linesByType['rawEcho'])->toBe([3, 5, 8, 11, 14, 18, 20, 23, 24, 26])
+        ->and($linesByType['unmatchedIgnore'])->toBe([6, 9, 12, 21]);
 });
 
 it('does not scan files that are not Blade templates', function (): void {

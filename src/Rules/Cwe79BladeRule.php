@@ -43,6 +43,14 @@ final class Cwe79BladeRule implements Rule
         // Report the template location, not the PHP file that starts the scan.
         $errors = [];
         foreach ($this->scanner->scan($this->directories) as $finding) {
+            if ($finding['type'] === 'unmatchedIgnore') {
+                $errors[] = \PHPStan\Rules\RuleErrorBuilder::message('No Blade raw echo matches @phpstan-ignore phpstanCwe.cwe79.')
+                    ->identifier('phpstanCwe.ignoreUnmatched')
+                    ->file($finding['file'])
+                    ->line($finding['line'])
+                    ->build();
+                continue;
+            }
             $errors[] = CweReport::make(
                 79,
                 'A Blade raw echo prints a value without HTML escape.',

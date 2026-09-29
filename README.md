@@ -40,6 +40,16 @@ parameters:
 Relative paths start at the current working directory. Set the list to
 `[]` to stop the Blade scan.
 
+To ignore one Blade raw echo, put a Blade comment immediately before it:
+
+```blade
+{{-- @phpstan-ignore phpstanCwe.cwe79 (This value is trusted.) --}}
+{!! $trustedHtml !!}
+```
+
+An ignore with no matching raw echo gets a report. See the
+[Blade rule document](src/Rules/Cwe79BladeRule.md) for the exact placement.
+
 ## Set a minimum probability score
 
 The default minimum is `0`. Set a value from `0` to `100` in `phpstan.neon`:
