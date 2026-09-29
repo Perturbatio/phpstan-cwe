@@ -3,15 +3,18 @@
 declare(strict_types=1);
 
 use Perturbatio\PhpstanCwe\Rules\Cwe79Rule;
+use PhpParser\Node;
 use PHPStan\Reflection\ReflectionProvider;
 use PHPStan\Rules\Rule;
 use PHPStan\Testing\RuleTestCase;
 
 class Cwe79RuleTestCase extends RuleTestCase
 {
+    private int $minimumProbability = 0;
+
     protected function getRule(): Rule
     {
-        return new Cwe79Rule($this->getContainer()->getByType(ReflectionProvider::class));
+        return new Cwe79Rule($this->getContainer()->getByType(ReflectionProvider::class), $this->minimumProbability);
     }
 
     public function checkFixture(array $expectedErrors): void
@@ -27,6 +30,17 @@ class Cwe79RuleTestCase extends RuleTestCase
     public function makeRule(int $minimumProbability): Cwe79Rule
     {
         return new Cwe79Rule($this->getContainer()->getByType(ReflectionProvider::class), $minimumProbability);
+    }
+
+    public function checkFixtureAtMinimumProbability(int $minimumProbability, array $expectedErrors): void
+    {
+        $this->minimumProbability = $minimumProbability;
+        $this->checkFixture($expectedErrors);
+    }
+
+    public function processNodeDirectly(Node $node): array
+    {
+        return $this->getRule()->processNode($node, $this->createMock(PHPStan\Analyser\Scope::class));
     }
 }
 
@@ -46,6 +60,10 @@ it('reports direct HTML output but not escaped or numeric output', function (): 
 it('rejects a probability minimum outside the valid range', function (): void {
     expect(fn() => $this->makeRule(101))->toThrow(InvalidArgumentException::class)
         ->and(fn() => $this->makeRule(-1))->toThrow(InvalidArgumentException::class);
+});
+
+it('filters reports below the configured probability minimum', function (): void {
+    $this->checkFixtureAtMinimumProbability(81, []);
 });
 
 it('does not trust a custom function with an HTML escape function name', function (): void {

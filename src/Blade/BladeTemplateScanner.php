@@ -38,7 +38,8 @@ final class BladeTemplateScanner
                 if ($file instanceof SplFileInfo && $file->isFile() && str_ends_with($file->getFilename(), '.blade.php')) {
                     $realPath = $file->getRealPath();
                     if ($realPath === false) {
-                        throw new \RuntimeException(sprintf('Cannot resolve Blade view: %s', $file->getPathname()));
+                        // The path can become invalid between isFile() and getRealPath().
+                        throw new \RuntimeException(sprintf('Cannot resolve Blade view: %s', $file->getPathname())); // @codeCoverageIgnore
                     }
                     if (isset($scannedFiles[$realPath])) {
                         continue;
@@ -64,7 +65,7 @@ final class BladeTemplateScanner
         $hide = static function (array $match): string {
             $blank = preg_replace('/[^\r\n]/', ' ', $match[0]);
             if ($blank === null) {
-                throw new \RuntimeException('Cannot hide a Blade comment or verbatim block.');
+                throw new \RuntimeException('Cannot hide a Blade comment or verbatim block.'); // @codeCoverageIgnore
             }
 
             return $blank;
@@ -88,7 +89,7 @@ final class BladeTemplateScanner
 
         $masked = preg_replace_callback('/\{\{--.*?--\}\}/s', $hide, $withoutVerbatim);
         if ($masked === null) {
-            throw new \RuntimeException(sprintf('Cannot hide Blade comments in view: %s', $file));
+            throw new \RuntimeException(sprintf('Cannot hide Blade comments in view: %s', $file)); // @codeCoverageIgnore
         }
         if (preg_match_all('/\{!!(.*?)!!\}/s', $masked, $matches, PREG_OFFSET_CAPTURE) === false) {
             throw new \RuntimeException(sprintf('Cannot scan raw echoes in Blade view: %s', $file));

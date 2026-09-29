@@ -51,3 +51,59 @@ it('reports an invalid configured view directory', function (): void {
     expect(fn () => (new BladeTemplateScanner())->scan(['tests/fixtures/CWE-79/no-views']))
         ->toThrow(InvalidArgumentException::class, 'Blade view directory does not exist');
 });
+
+it('reports an invalid working directory', function (): void {
+    $workingDirectory = getcwd();
+    $directory = sys_get_temp_dir() . '/phpstan-cwe-' . bin2hex(random_bytes(8));
+    mkdir($directory);
+    chdir($directory);
+
+    try {
+        expect(rmdir($directory))->toBeTrue()
+            ->and(fn () => (new BladeTemplateScanner())->scan([]))
+            ->toThrow(RuntimeException::class, 'Cannot get the current directory for the Blade scan.');
+    } finally {
+        chdir($workingDirectory);
+    }
+});
+
+it('reports unreadable Blade templates', function (): void {
+    $directory = sys_get_temp_dir() . '/phpstan-cwe-' . bin2hex(random_bytes(8));
+    mkdir($directory);
+    $file = $directory . '/unreadable.blade.php';
+    file_put_contents($file, '{!! $value !!}');
+    chmod($file, 0000);
+    set_error_handler(static fn (int $severity): bool => $severity === E_WARNING);
+
+    try {
+        expect(fn () => (new BladeTemplateScanner())->scan([$directory]))
+            ->toThrow(RuntimeException::class, 'Cannot read Blade view:');
+    } finally {
+        restore_error_handler();
+        chmod($file, 0600);
+        unlink($file);
+        rmdir($directory);
+    }
+});
+
+it('reports PCRE failures when scanning Blade templates', function (string $source, string $message): void {
+    $directory = sys_get_temp_dir() . '/phpstan-cwe-' . bin2hex(random_bytes(8));
+    mkdir($directory);
+    $file = $directory . '/failure.blade.php';
+    file_put_contents($file, $source);
+    $backtrackLimit = ini_get('pcre.backtrack_limit');
+    ini_set('pcre.backtrack_limit', '1');
+
+    try {
+        expect(fn () => (new BladeTemplateScanner())->scan([$directory]))
+            ->toThrow(RuntimeException::class, $message);
+    } finally {
+        ini_set('pcre.backtrack_limit', $backtrackLimit);
+        unlink($file);
+        rmdir($directory);
+    }
+})->with([
+    'verbatim pattern' => ["@verbatim\n" . str_repeat('x', 10000), 'Cannot scan Blade view:'],
+    'Blade comment pattern' => [str_repeat('{{--x', 500) . '--}}', 'Cannot scan Blade comments in view:'],
+    'raw echo pattern' => [str_repeat('{!!x', 500) . '!!}', 'Cannot scan raw echoes in Blade view:'],
+]);

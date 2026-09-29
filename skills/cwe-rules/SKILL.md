@@ -47,8 +47,8 @@ includes one file more than one time.
 - Declare these constants in the rule:
 
 ```php
-private const SEVERITY = 'high';
-private const PROBABILITY = 80;
+private const string SEVERITY = 'high';
+private const int PROBABILITY = 80;
 ```
 
 - Accept `int $minProbability = 0` in the constructor. Call

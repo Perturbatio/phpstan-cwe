@@ -112,7 +112,7 @@ Split tests across parallel processes for faster CI runs.
 
 ### Architecture Testing
 
-Pest 4 includes architecture testing (from Pest 3):
+Pest 5 includes architecture testing (from Pest 3):
 
 <!-- Architecture Test Example -->
 ```php
