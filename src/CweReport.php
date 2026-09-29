@@ -18,11 +18,17 @@ final class CweReport
         return $probability >= $minimumProbability;
     }
 
-    public static function make(int $cwe, string $reason, string $severity, int $probability): IdentifierRuleError
-    {
+    public static function make(
+        int $cwe,
+        string $reason,
+        string $severity,
+        int $probability,
+        ?string $file = null,
+        ?int $line = null,
+    ): IdentifierRuleError {
         $url = sprintf('https://cwe.mitre.org/data/definitions/%d.html', $cwe);
 
-        return RuleErrorBuilder::message(sprintf(
+        $builder = RuleErrorBuilder::message(sprintf(
             'CWE-%d: %s Severity: %s. Probability: %d%%. %s',
             $cwe,
             $reason,
@@ -31,7 +37,14 @@ final class CweReport
             $url,
         ))
             ->identifier(sprintf('phpstanCwe.cwe%d', $cwe))
-            ->metadata(['cwe' => $cwe, 'severity' => $severity, 'probability' => $probability, 'url' => $url])
-            ->build();
+            ->metadata(['cwe' => $cwe, 'severity' => $severity, 'probability' => $probability, 'url' => $url]);
+        if ($file !== null) {
+            $builder->file($file);
+        }
+        if ($line !== null) {
+            $builder->line($line);
+        }
+
+        return $builder->build();
     }
 }

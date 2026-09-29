@@ -1,0 +1,14 @@
+services:
+    -
+        class: Perturbatio\PhpstanCwe\Blade\BladeTemplateScanner
+    -
+        class: Perturbatio\PhpstanCwe\Blade\AnalysedFileCollector
+        tags:
+            - phpstan.collector
+    -
+        class: Perturbatio\PhpstanCwe\Rules\Cwe79BladeRule
+        arguments:
+            directories: %phpstanCwe.bladeDirectories%
+            minProbability: %phpstanCwe.minProbability%
+        tags:
+            - phpstan.rules.rule

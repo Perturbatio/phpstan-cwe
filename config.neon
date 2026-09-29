@@ -1,6 +1,8 @@
 parameters:
     phpstanCwe:
         minProbability: 0
+        bladeDirectories:
+            - resources/views
 
 parametersSchema:
-    phpstanCwe: structure([minProbability: int()])
+    phpstanCwe: structure([minProbability: int(), bladeDirectories: listOf(string())])

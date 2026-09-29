@@ -35,6 +35,6 @@ it('reports direct SQL input but not bound or numeric input', function (): void 
 });
 
 it('rejects a probability minimum outside the valid range', function (): void {
-    expect(fn () => new Cwe89Rule(101))->toThrow(InvalidArgumentException::class);
-    expect(fn () => new Cwe89Rule(-1))->toThrow(InvalidArgumentException::class);
+    expect(fn() => new Cwe89Rule(101))->toThrow(InvalidArgumentException::class)
+        ->and(fn() => new Cwe89Rule(-1))->toThrow(InvalidArgumentException::class);
 });

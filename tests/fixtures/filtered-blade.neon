@@ -1,0 +1,6 @@
+includes:
+    - blade.neon
+
+parameters:
+    phpstanCwe:
+        minProbability: 81

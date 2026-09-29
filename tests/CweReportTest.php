@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 use Perturbatio\PhpstanCwe\CweReport;
+use PHPStan\Rules\FileRuleError;
+use PHPStan\Rules\LineRuleError;
 use PHPStan\Rules\MetadataRuleError;
 
 it('keeps severity, score, link, and identifier in the report', function (): void {
@@ -17,6 +19,16 @@ it('keeps severity, score, link, and identifier in the report', function (): voi
         'probability' => 80,
         'url' => 'https://cwe.mitre.org/data/definitions/79.html',
     ]);
+});
+
+it('sets the template file and line when a rule scans a separate file', function (): void {
+    $file = __DIR__ . '/fixtures/blade/views/home.blade.php';
+    $report = CweReport::make(79, 'Blade raw output.', 'high', 80, $file, 7);
+
+    expect($report)->toBeInstanceOf(FileRuleError::class);
+    expect($report)->toBeInstanceOf(LineRuleError::class);
+    expect($report->getFile())->toBe($file);
+    expect($report->getLine())->toBe(7);
 });
 
 it('includes scores at the minimum and excludes lower scores', function (): void {

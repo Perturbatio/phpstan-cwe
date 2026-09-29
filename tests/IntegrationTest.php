@@ -57,3 +57,38 @@ it('filters reports below the minimum probability', function (): void {
 
     expect($result['totals']['file_errors'])->toBe(0);
 });
+
+it('reports Blade raw echoes at the view file and line', function (): void {
+    $result = analyseWithConfig('tests/fixtures/blade.neon');
+    $templateFiles = [];
+
+    foreach ($result['files'] as $path => $file) {
+        if (str_ends_with($path, '.blade.php')) {
+            $templateFiles[basename($path)] = $file['messages'];
+        }
+    }
+
+    expect(array_keys($templateFiles))->toContain('home.blade.php', 'item.blade.php');
+    expect(array_column($templateFiles['home.blade.php'], 'line'))->toBe([3, 9, 12]);
+    expect(array_column($templateFiles['item.blade.php'], 'line'))->toBe([1]);
+    foreach ($templateFiles as $messages) {
+        foreach ($messages as $message) {
+            expect($message['identifier'])->toBe('phpstanCwe.cwe79');
+            expect($message['message'])->toContain('Severity: high.', 'Probability: 80%.', 'https://cwe.mitre.org/data/definitions/79.html');
+            expect($message['ignorable'])->toBeTrue();
+        }
+    }
+});
+
+it('loads the Blade rule without the PHP rules', function (): void {
+    $result = analyseWithConfig('tests/fixtures/blade-only.neon');
+
+    expect($result['totals']['file_errors'])->toBe(4);
+    expect(array_keys($result['files']))->not->toContain(dirname(__DIR__) . '/tests/fixtures/integration.php');
+});
+
+it('filters Blade reports below the minimum probability', function (): void {
+    $result = analyseWithConfig('tests/fixtures/filtered-blade.neon');
+
+    expect($result['totals']['file_errors'])->toBe(0);
+});
