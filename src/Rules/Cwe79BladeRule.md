@@ -25,8 +25,10 @@ It does not follow variables to their source. It can report a safe value
 that is deliberately trusted or already escaped. It cannot check each HTML
 output context. Review each report before you change a template.
 
-To ignore one raw echo, put a Blade comment immediately before it. Use
-PHPStan's error identifier. You can add a reason in parentheses:
+Each report has a tip that shows how to ignore it. Ignore a report only if
+you are sure that the value is safe HTML. To ignore one raw echo, put a
+Blade comment immediately before it. Use PHPStan's error identifier. You
+can add a reason in parentheses:
 
 ```blade
 {{-- @phpstan-ignore phpstanCwe.cwe79 (This text comes from a trusted source.) --}}

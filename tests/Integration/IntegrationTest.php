@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 function analyseWithConfig(string $config): array
 {
-    $root = dirname(__DIR__);
+    $root = dirname(__DIR__, 2);
     $process = proc_open(
-        [PHP_BINARY, $root . '/vendor/bin/phpstan', 'analyse', $root . '/tests/fixtures/integration.php',
+        [PHP_BINARY, $root . '/vendor/bin/phpstan', 'analyse', $root . '/tests/fixtures/shared/integration.php',
             '--configuration=' . $root . '/' . $config, '--level=0', '--no-progress', '--error-format=json'],
         [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
         $pipes,
@@ -58,13 +58,13 @@ it('loads a single rule when selected', function (): void {
 });
 
 it('filters reports below the minimum probability', function (): void {
-    $result = analyseWithConfig('tests/fixtures/filtered.neon');
+    $result = analyseWithConfig('tests/fixtures/shared/filtered.neon');
 
     expect($result['totals']['file_errors'])->toBe(0);
 });
 
 it('reports Blade raw echoes at the view file and line', function (): void {
-    $result = analyseWithConfig('tests/fixtures/blade.neon');
+    $result = analyseWithConfig('tests/fixtures/CWE-79/blade.neon');
     $templateFiles = [];
 
     foreach ($result['files'] as $path => $file) {
@@ -81,26 +81,27 @@ it('reports Blade raw echoes at the view file and line', function (): void {
             expect($message['identifier'])->toBe('phpstanCwe.cwe79')
                 ->and($message['message'])->toContain('Severity: high.', 'Probability: 80%.',
                     'https://cwe.mitre.org/data/definitions/79.html')
-                ->and($message['ignorable'])->toBeTrue();
+                ->and($message['ignorable'])->toBeTrue()
+                ->and($message['tip'])->toBe('Only if you are sure that this value is safe HTML, put {{-- @phpstan-ignore phpstanCwe.cwe79 (Reason) --}} immediately BEFORE this raw echo. Replace "Reason" with the reason.');
         }
     }
 });
 
 it('loads the Blade rule without the PHP rules', function (): void {
-    $result = analyseWithConfig('tests/fixtures/blade-only.neon');
+    $result = analyseWithConfig('tests/fixtures/CWE-79/blade-only.neon');
 
     expect($result['totals']['file_errors'])->toBe(4)
-        ->and(array_keys($result['files']))->not->toContain(dirname(__DIR__).'/tests/fixtures/integration.php');
+        ->and(array_keys($result['files']))->not->toContain(dirname(__DIR__, 2).'/tests/fixtures/shared/integration.php');
 });
 
 it('filters Blade reports below the minimum probability', function (): void {
-    $result = analyseWithConfig('tests/fixtures/filtered-blade.neon');
+    $result = analyseWithConfig('tests/fixtures/CWE-79/filtered-blade.neon');
 
     expect($result['totals']['file_errors'])->toBe(0);
 });
 
 it('ignores one Blade echo and reports unused ignore comments at their lines', function (): void {
-    $result = analyseWithConfig('tests/fixtures/blade-ignores.neon');
+    $result = analyseWithConfig('tests/fixtures/CWE-79/blade-ignores.neon');
     $messages = array_values($result['files'])[0]['messages'];
     $linesByIdentifier = [];
 

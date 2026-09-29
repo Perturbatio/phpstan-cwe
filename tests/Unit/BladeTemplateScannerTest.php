@@ -5,7 +5,7 @@ declare(strict_types=1);
 use Perturbatio\PhpstanCwe\Blade\BladeTemplateScanner;
 
 it('finds raw Blade values and keeps template line numbers', function (): void {
-    $directory = __DIR__ . '/fixtures/blade/views';
+    $directory = __DIR__ . '/../fixtures/CWE-79/blade/views';
     $findings = (new BladeTemplateScanner())->scan([$directory]);
 
     expect($findings)->toHaveCount(4)
@@ -16,7 +16,7 @@ it('finds raw Blade values and keeps template line numbers', function (): void {
 });
 
 it('ignores only the raw echo next to a matching Blade comment', function (): void {
-    $file = __DIR__ . '/blade-ignores/ignored.blade.php';
+    $file = __DIR__ . '/../fixtures/CWE-79/blade/ignores/ignored.blade.php';
     $findings = (new BladeTemplateScanner())->scan([dirname($file)]);
     $linesByType = [];
 
@@ -30,13 +30,13 @@ it('ignores only the raw echo next to a matching Blade comment', function (): vo
 });
 
 it('does not scan files that are not Blade templates', function (): void {
-    $findings = (new BladeTemplateScanner())->scan([__DIR__ . '/fixtures']);
+    $findings = (new BladeTemplateScanner())->scan([__DIR__ . '/../fixtures/CWE-89']);
 
-    expect($findings)->toHaveCount(4);
+    expect($findings)->toBe([]);
 });
 
 it('does not report a view twice when directories overlap', function (): void {
-    $directory = __DIR__ . '/fixtures/blade/views';
+    $directory = __DIR__ . '/../fixtures/CWE-79/blade/views';
     $findings = (new BladeTemplateScanner())->scan([$directory, $directory . '/parts']);
 
     expect($findings)->toHaveCount(4);
@@ -48,6 +48,6 @@ it('does not require a Laravel view directory in other projects', function (): v
 });
 
 it('reports an invalid configured view directory', function (): void {
-    expect(fn () => (new BladeTemplateScanner())->scan(['tests/fixtures/no-views']))
+    expect(fn () => (new BladeTemplateScanner())->scan(['tests/fixtures/CWE-79/no-views']))
         ->toThrow(InvalidArgumentException::class, 'Blade view directory does not exist');
 });

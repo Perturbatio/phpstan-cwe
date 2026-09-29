@@ -1,7 +1,0 @@
-includes:
-    - ../../cwe79-blade.neon
-
-parameters:
-    phpstanCwe:
-        bladeDirectories:
-            - tests/fixtures/blade/views

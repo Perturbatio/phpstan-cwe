@@ -73,3 +73,16 @@ The same data is in the PHPStan error metadata.
 Read [CWE-79](src/Rules/Cwe79Rule.md) and
 [CWE-79 in Blade](src/Rules/Cwe79BladeRule.md) and
 [CWE-89](src/Rules/Cwe89Rule.md) for examples and limits.
+
+## Run tests
+
+Tests in `tests/Unit` check the scanner and report data. Tests in
+`tests/Integration` run rules with PHPStan. Rule fixtures are in
+`tests/fixtures/CWE-79` and `tests/fixtures/CWE-89`. The fixture used by
+both rules is in `tests/fixtures/shared`.
+
+```sh
+vendor/bin/pest
+vendor/bin/pest --testsuite Unit
+vendor/bin/pest --testsuite Integration
+```

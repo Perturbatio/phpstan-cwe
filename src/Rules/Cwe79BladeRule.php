@@ -15,8 +15,12 @@ use PHPStan\Rules\Rule;
 /** @implements Rule<CollectedDataNode> */
 final class Cwe79BladeRule implements Rule
 {
-    private const SEVERITY = 'high';
-    private const PROBABILITY = 80;
+    private const string SEVERITY = 'high';
+    private const int PROBABILITY = 80;
+    // Tell the developer to check the value before they ignore the report.
+    private const string IGNORE_TIP = 'Only if you are sure that this value is safe HTML, put '
+        . '{{-- @phpstan-ignore phpstanCwe.cwe79 (Reason) --}} immediately BEFORE this raw echo. '
+        . 'Replace "Reason" with the reason.';
 
     /** @param list<string> $directories */
     public function __construct(
@@ -58,6 +62,7 @@ final class Cwe79BladeRule implements Rule
                 self::PROBABILITY,
                 $finding['file'],
                 $finding['line'],
+                self::IGNORE_TIP,
             );
         }
 

@@ -25,6 +25,7 @@ final class CweReport
         int $probability,
         ?string $file = null,
         ?int $line = null,
+        ?string $tip = null,
     ): IdentifierRuleError {
         $url = sprintf('https://cwe.mitre.org/data/definitions/%d.html', $cwe);
 
@@ -43,6 +44,9 @@ final class CweReport
         }
         if ($line !== null) {
             $builder->line($line);
+        }
+        if ($tip !== null) {
+            $builder->tip($tip);
         }
 
         return $builder->build();

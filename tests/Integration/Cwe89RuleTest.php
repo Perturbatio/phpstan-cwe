@@ -15,7 +15,7 @@ class Cwe89RuleTestCase extends RuleTestCase
 
     public function checkFixture(array $expectedErrors): void
     {
-        $this->analyse([__DIR__ . '/fixtures/cwe89.php'], $expectedErrors);
+        $this->analyse([__DIR__ . '/../fixtures/CWE-89/cwe89.php'], $expectedErrors);
     }
 }
 

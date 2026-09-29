@@ -16,12 +16,12 @@ class Cwe79RuleTestCase extends RuleTestCase
 
     public function checkFixture(array $expectedErrors): void
     {
-        $this->analyse([__DIR__ . '/fixtures/cwe79.php'], $expectedErrors);
+        $this->analyse([__DIR__ . '/../fixtures/CWE-79/cwe79.php'], $expectedErrors);
     }
 
     public function checkNamespacedFixture(array $expectedErrors): void
     {
-        $this->analyse([__DIR__ . '/fixtures/cwe79-namespaced.php'], $expectedErrors);
+        $this->analyse([__DIR__ . '/../fixtures/CWE-79/cwe79-namespaced.php'], $expectedErrors);
     }
 
     public function makeRule(int $minimumProbability): Cwe79Rule
