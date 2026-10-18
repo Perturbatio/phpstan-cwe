@@ -14,8 +14,17 @@
             "email": "me@perturbatio.com"
         }
     ],
+    "scripts": {
+        "format": "pint",
+        "format:check": "pint --test",
+        "test": "pest",
+        "test:coverage": "pest --coverage",
+        "test:coverage:check": "pest --coverage --coverage-check",
+        "analyse": "phpstan analyse src"
+    },
     "require-dev": {
-        "pestphp/pest": "5.*"
+        "pestphp/pest": "5.*",
+        "laravel/pint": "^1.32"
     },
     "config": {
         "allow-plugins": {
@@ -24,6 +33,6 @@
     },
     "require": {
         "phpstan/phpstan": "^2.1",
-        "php": "^8.1"
+        "php": "^8.3"
     }
 }

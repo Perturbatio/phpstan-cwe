@@ -12,8 +12,11 @@ it('keeps severity, score, link, and identifier in the report', function (): voi
     $report = CweReport::make(79, 'Direct input is in HTML.', 'high', 80);
 
     expect($report->getIdentifier())->toBe('phpstanCwe.cwe79')
-        ->and($report->getMessage())->toContain('Severity: high.', 'Probability: 80%.',
-            'https://cwe.mitre.org/data/definitions/79.html')
+        ->and($report->getMessage())->toContain(
+            'Severity: high.',
+            'Probability: 80%.',
+            'https://cwe.mitre.org/data/definitions/79.html'
+        )
         ->and($report)->toBeInstanceOf(MetadataRuleError::class)
         ->and($report->getMetadata())->toBe([
             'cwe' => 79,

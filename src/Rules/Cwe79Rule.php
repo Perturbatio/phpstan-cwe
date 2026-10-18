@@ -16,8 +16,8 @@ use PHPStan\Rules\Rule;
 /** @implements Rule<Node> */
 final class Cwe79Rule implements Rule
 {
-    private const SEVERITY = 'high';
-    private const PROBABILITY = 80;
+    private const string SEVERITY = 'high';
+    private const int PROBABILITY = 80;
 
     public function __construct(
         private readonly ReflectionProvider $reflectionProvider,

@@ -3,3 +3,4 @@ includes:
     - rules/cwe79.neon
     - rules/cwe79-blade.neon
     - rules/cwe89.neon
+    - rules/cwe89-laravel.neon

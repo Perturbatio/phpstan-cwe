@@ -12,9 +12,15 @@ This project has domain-specific skills available in `**/skills/**`. You MUST ac
 - Check for existing components to reuse before writing a new one.
 
 ## Tests
+
 - Tests use Pest v5
 - All code must be covered by unit tests. If you add a new feature, you must also add unit tests for it.
 - Tests must assert positive and negative cases, including edge cases. If you find a bug, write a test that reproduces it before fixing it.
+
+## Code checks
+
+- After you change PHP code, run `composer format` and then `composer analyse`.
+- Run both commands before you finish the task.
 
 Implementation plan
 1. Set the package contract. Add PHPStan as a package dependency. State the supported PHP and PHPStan versions. Keep rule classes small and use descriptive names.

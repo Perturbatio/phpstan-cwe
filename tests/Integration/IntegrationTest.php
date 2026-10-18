@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-function analyseWithConfig(string $config): array
+function analyseWithConfig(string $config, string $fixture = 'tests/fixtures/shared/integration.php'): array
 {
     $root = dirname(__DIR__, 2);
     $process = proc_open(
-        [PHP_BINARY, $root . '/vendor/bin/phpstan', 'analyse', $root . '/tests/fixtures/shared/integration.php',
+        [PHP_BINARY, $root . '/vendor/bin/phpstan', 'analyse', $root . '/' . $fixture,
             '--configuration=' . $root . '/' . $config, '--level=0', '--no-progress', '--error-format=json'],
         [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
         $pipes,
@@ -38,10 +38,16 @@ it('loads both rules with identifiers and MITRE links', function (): void {
     expect($result['totals']['file_errors'])->toBe(2)
         ->and(array_column($messages, 'identifier'))->toBe(['phpstanCwe.cwe79', 'phpstanCwe.cwe89'])
         ->and(array_column($messages, 'line'))->toBe([3, 5])
-        ->and($messages[0]['message'])->toContain('Severity: high.', 'Probability: 80%.',
-            'https://cwe.mitre.org/data/definitions/79.html')
-        ->and($messages[1]['message'])->toContain('Severity: high.', 'Probability: 80%.',
-            'https://cwe.mitre.org/data/definitions/89.html')
+        ->and($messages[0]['message'])->toContain(
+            'Severity: high.',
+            'Probability: 80%.',
+            'https://cwe.mitre.org/data/definitions/79.html'
+        )
+        ->and($messages[1]['message'])->toContain(
+            'Severity: high.',
+            'Probability: 80%.',
+            'https://cwe.mitre.org/data/definitions/89.html'
+        )
         ->and(array_column($messages, 'ignorable'))->toBe([true, true]);
 });
 
@@ -55,6 +61,27 @@ it('loads a single rule when selected', function (): void {
     $messages = array_values($result['files'])[0]['messages'];
 
     expect(array_column($messages, 'identifier'))->toBe(['phpstanCwe.cwe89']);
+});
+
+it('loads the Laravel SQL rule from its public configuration', function (): void {
+    $result = analyseWithConfig('cwe89-laravel.neon', 'tests/fixtures/CWE-89/laravel.php');
+    $messages = array_values($result['files'])[0]['messages'];
+    $expectedRequestMessage = 'CWE-89: Request input is used in Laravel raw SQL. Use a bound parameter. Severity: high. Probability: 80%. https://cwe.mitre.org/data/definitions/89.html';
+    $expectedUnknownMessage = 'CWE-89: Warning: The source of a dynamic value in Laravel raw SQL is unknown. Use a bound parameter. Severity: high. Probability: 45%. https://cwe.mitre.org/data/definitions/89.html';
+
+    expect($result['totals']['file_errors'])->toBe(19)
+        ->and(array_keys($result['files']))
+        ->toBe([dirname(__DIR__, 2) . '/tests/fixtures/CWE-89/laravel.php'])
+        ->and(array_unique(array_column($messages, 'identifier')))
+        ->toBe(['phpstanCwe.cwe89']);
+    expect(array_column($messages, 'line'))->toBe([120, 121, 122, 123, 124, 125, 126, 127, 128, 131, 132, 134, 135, 141, 143, 145, 147, 151, 152]);
+    foreach ($messages as $index => $message) {
+        expect($message['message'])->toBe(in_array($index, [11, 12, 17, 18], true)
+            ? $expectedUnknownMessage
+            : $expectedRequestMessage)
+            ->and($message['identifier'])->toBe('phpstanCwe.cwe89')
+            ->and($message['ignorable'])->toBeTrue();
+    }
 });
 
 it('filters reports below the minimum probability', function (): void {
@@ -79,8 +106,11 @@ it('reports Blade raw echoes at the view file and line', function (): void {
     foreach ($templateFiles as $messages) {
         foreach ($messages as $message) {
             expect($message['identifier'])->toBe('phpstanCwe.cwe79')
-                ->and($message['message'])->toContain('Severity: high.', 'Probability: 80%.',
-                    'https://cwe.mitre.org/data/definitions/79.html')
+                ->and($message['message'])->toContain(
+                    'Severity: high.',
+                    'Probability: 80%.',
+                    'https://cwe.mitre.org/data/definitions/79.html'
+                )
                 ->and($message['ignorable'])->toBeTrue()
                 ->and($message['tip'])->toBe('Only if you are sure that this value is safe HTML, put {{-- @phpstan-ignore phpstanCwe.cwe79 (Reason) --}} immediately BEFORE this raw echo. Replace "Reason" with the reason.');
         }

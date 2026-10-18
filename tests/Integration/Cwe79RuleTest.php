@@ -58,8 +58,8 @@ it('reports direct HTML output but not escaped or numeric output', function (): 
 });
 
 it('rejects a probability minimum outside the valid range', function (): void {
-    expect(fn() => $this->makeRule(101))->toThrow(InvalidArgumentException::class)
-        ->and(fn() => $this->makeRule(-1))->toThrow(InvalidArgumentException::class);
+    expect(fn () => $this->makeRule(101))->toThrow(InvalidArgumentException::class)
+        ->and(fn () => $this->makeRule(-1))->toThrow(InvalidArgumentException::class);
 });
 
 it('filters reports below the configured probability minimum', function (): void {
