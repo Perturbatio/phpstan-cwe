@@ -31,8 +31,8 @@ expression is the first argument. Values in the bindings argument are not
 part of the SQL expression and do not cause a report. Static string, integer,
 and float expressions do not cause a report.
 
-The rule follows simple local variable assignments in one function or
-method in source order. It supports the `DB` facade import and Laravel's
+The rule follows simple local variable assignments and `.=` operations in
+one function or method in source order. It supports the `DB` facade import and Laravel's
 global `DB` alias. It reports direct request data with an **80%**
 probability score.
 When it cannot find the source of a dynamic value, it reports a warning with
@@ -46,5 +46,8 @@ reports with conditional assignments with care. It does not check Laravel's
 was sanitized or is a trusted SQL fragment. Review such reports with care.
 It does not prove that an expression is safe because it has a string type.
 Use bound parameters for values.
+
+To see an example output of this rule run:
+```vendor/bin/phpstan analyse tests/fixtures/CWE-89/laravel.php --configuration=cwe89-laravel.neon --level=0 --no-progress```
 
 Full explanation: https://cwe.mitre.org/data/definitions/89.html

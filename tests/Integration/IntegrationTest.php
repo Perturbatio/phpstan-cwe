@@ -68,15 +68,25 @@ it('loads the Laravel SQL rule from its public configuration', function (): void
     $messages = array_values($result['files'])[0]['messages'];
     $expectedRequestMessage = 'CWE-89: Request input is used in Laravel raw SQL. Use a bound parameter. Severity: high. Probability: 80%. https://cwe.mitre.org/data/definitions/89.html';
     $expectedUnknownMessage = 'CWE-89: Warning: The source of a dynamic value in Laravel raw SQL is unknown. Use a bound parameter. Severity: high. Probability: 45%. https://cwe.mitre.org/data/definitions/89.html';
+    // The indices (zero-based) of messages that are expected to have the unknown source message
+    $unknownSourceMessageIndices = [11, 12, 17, 18, 19, 20];
 
-    expect($result['totals']['file_errors'])->toBe(19)
+    // And those that are expected to have the request input message
+    $requestInputMessageIndices = [
+        120, 121, 122, 123, 124,
+        125, 126, 127, 128, 131,
+        132, 134, 135, 141, 143,
+        145, 147, 151, 152, 156,
+        157
+    ];
+    expect($result['totals']['file_errors'])->toBe(21)
         ->and(array_keys($result['files']))
-        ->toBe([dirname(__DIR__, 2) . '/tests/fixtures/CWE-89/laravel.php'])
+        ->toBe([dirname(__DIR__, 2).'/tests/fixtures/CWE-89/laravel.php'])
         ->and(array_unique(array_column($messages, 'identifier')))
-        ->toBe(['phpstanCwe.cwe89']);
-    expect(array_column($messages, 'line'))->toBe([120, 121, 122, 123, 124, 125, 126, 127, 128, 131, 132, 134, 135, 141, 143, 145, 147, 151, 152]);
+        ->toBe(['phpstanCwe.cwe89'])
+        ->and(array_column($messages, 'line'))->toBe($requestInputMessageIndices);
     foreach ($messages as $index => $message) {
-        expect($message['message'])->toBe(in_array($index, [11, 12, 17, 18], true)
+        expect($message['message'])->toBe(in_array($index, $unknownSourceMessageIndices, true)
             ? $expectedUnknownMessage
             : $expectedRequestMessage)
             ->and($message['identifier'])->toBe('phpstanCwe.cwe89')

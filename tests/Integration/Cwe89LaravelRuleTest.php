@@ -92,6 +92,22 @@ it('reports an unknown source with a lower confidence and warning', function ():
         );
 });
 
+it('does not report a static Laravel raw SQL expression', function (): void {
+    $event = [
+        'kind' => 'sink',
+        'file' => __DIR__ . '/../fixtures/CWE-89/laravel.php',
+        'scope' => 'example',
+        'offset' => 20,
+        'line' => 43,
+        'dynamic' => false,
+        'request' => false,
+        'unknown' => false,
+        'variables' => [],
+    ];
+
+    expect($this->processFindingsAtMinimumProbability(0, [$event]))->toBe([]);
+});
+
 it('recognizes the Laravel DB global alias without a use statement', function (): void {
     $scope = $this->createMock(Scope::class);
     $scope->method('resolveName')->willReturn('App\\DB');
@@ -149,4 +165,8 @@ it('filters reports below the configured probability minimum', function (): void
 
     expect($this->processFindingsAtMinimumProbability(46, [$event]))->toBe([])
         ->and($this->processFindingsAtMinimumProbability(45, [$event]))->toHaveCount(1);
+});
+
+it('returns the correct node type for the rule', function (): void {
+    expect($this->getRule()->getNodeType())->toBe(CollectedDataNode::class);
 });

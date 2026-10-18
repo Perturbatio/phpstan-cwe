@@ -9,6 +9,7 @@ use PhpParser\Node\Arg;
 use PhpParser\Node\ArgPlaceholder;
 use PhpParser\Node\Expr;
 use PhpParser\Node\Expr\Assign;
+use PhpParser\Node\Expr\AssignOp\Concat as ConcatAssign;
 use PhpParser\Node\Expr\MethodCall;
 use PhpParser\Node\Expr\StaticCall;
 use PhpParser\Node\Expr\Variable;
@@ -79,8 +80,17 @@ final class Cwe89LaravelCollector implements Collector
     /** @return LaravelSqlEvent|null */
     public function processNode(Node $node, Scope $scope): ?array
     {
-        if ($node instanceof Assign && $node->var instanceof Variable && is_string($node->var->name)) {
+        if (($node instanceof Assign || $node instanceof ConcatAssign)
+            && $node->var instanceof Variable
+            && is_string($node->var->name)
+        ) {
             $facts = $this->expressionFacts($node->expr);
+            if ($node instanceof ConcatAssign) {
+                $facts = $this->mergeFacts(
+                    $facts,
+                    ['dynamic' => true, 'request' => false, 'unknown' => false, 'variables' => [$node->var->name]],
+                );
+            }
 
             return [
                 'kind' => 'assignment',

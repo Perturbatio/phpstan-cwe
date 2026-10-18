@@ -150,5 +150,11 @@ namespace {
         $valueFromUnknownSource = getUnknownValue();
         DB::select('SELECT * FROM users WHERE name = ' . $valueFromUnknownSource); // Report: The local value source is unknown.
         DB::select('SELECT * FROM users WHERE name = ' . $unknownParameter); // Report: The parameter source is unknown.
+
+        $name = 'Alice';
+        $name .= getUnknownValue(); // No report: The rule tracks this value to the SQL sink below
+        DB::select('SELECT * FROM users WHERE name = ' . $name); // Report: The variable contains an unknown appended value
+        $queryBuilder->whereRaw("name = '" . $name); // Report: same variable used in a different SQL sink, still unknown
+
     }
 }
