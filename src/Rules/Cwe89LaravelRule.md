@@ -43,7 +43,7 @@ The rule does not trace values across function calls or between functions.
 It does not merge assignments from different branches or loops. Check
 reports with conditional assignments with care. It does not check Laravel's
 `DB::raw()` or raw connection methods. It can report a dynamic value that
-was sanitized or is a trusted SQL fragment. Review such reports with care.
+was sanitised or is a trusted SQL fragment. Review such reports with care.
 It does not prove that an expression is safe because it has a string type.
 Use bound parameters for values.
 
