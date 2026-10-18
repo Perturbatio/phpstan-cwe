@@ -14,6 +14,7 @@ This project has domain-specific skills available in `**/skills/**`. You MUST ac
 ## Tests
 
 - Tests use Pest v5
+- Agents must use `--no-tia` for Pest test runs, including coverage runs. Use `./vendor/bin/pest --no-tia`, or `composer test -- --no-tia`. This avoids TIA Git check failures in agent sessions. Keep TIA enabled for local test runs.
 - All code must be covered by unit tests. If you add a new feature, you must also add unit tests for it.
 - Tests must assert positive and negative cases, including edge cases. If you find a bug, write a test that reproduces it before fixing it.
 

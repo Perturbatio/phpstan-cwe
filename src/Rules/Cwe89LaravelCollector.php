@@ -86,6 +86,7 @@ final class Cwe89LaravelCollector implements Collector
         ) {
             $facts = $this->expressionFacts($node->expr);
             if ($node instanceof ConcatAssign) {
+                // The .= operation also reads the old value of the variable
                 $facts = $this->mergeFacts(
                     $facts,
                     ['dynamic' => true, 'request' => false, 'unknown' => false, 'variables' => [$node->var->name]],
@@ -108,6 +109,7 @@ final class Cwe89LaravelCollector implements Collector
             return null;
         }
 
+        // Store the SQL value facts so the rule can check its source
         $facts = $this->expressionFacts($query);
 
         return [

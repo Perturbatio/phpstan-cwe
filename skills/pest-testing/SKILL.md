@@ -16,7 +16,7 @@ Use `search-docs` for detailed Pest 5 patterns and documentation.
 
 ### Creating Tests
 
-All tests must be written using Pest. Use `artisan make:test --pest {name}`.
+All tests must be written using Pest.
 
 ### Test Organization
 
@@ -37,10 +37,12 @@ it('is true', function () {
 
 ### Running Tests
 
-- Run minimal tests with filter before finalizing: `artisan test --compact --filter=testName`.
-- Run all tests: `artisan test --compact`.
-- Run file: `artisan test --compact tests/Feature/ExampleTest.php`.
+- Agents must use `--no-tia` for Pest test runs. This avoids TIA Git check failures in agent sessions. Keep TIA enabled for local test runs.
+- Run minimal tests with filter before finalising: `./vendor/bin/pest --no-tia --compact --filter=testName`.
+- Run all tests: `./vendor/bin/pest --no-tia --compact`.
+- Run file: `./vendor/bin/pest --no-tia --compact tests/Feature/ExampleTest.php`.
 - DO NOT use the -q option since this can suppress some errors
+- All tests must have 100% code coverage use `./vendor/bin/pest --no-tia --coverage --min=100` to check coverage.
 
 ## Assertions
 

@@ -63,6 +63,10 @@ final class BladeTemplateScanner
 
         // Keep newlines so the report points to the line in the view.
         $hide = static function (array $match): string {
+            if (!isset($match[0]) || !is_string($match[0])) {
+                throw new \RuntimeException('Cannot read matched Blade template text.'); // @codeCoverageIgnore
+            }
+
             $blank = preg_replace('/[^\r\n]/', ' ', $match[0]);
             if ($blank === null) {
                 throw new \RuntimeException('Cannot hide a Blade comment or verbatim block.'); // @codeCoverageIgnore

@@ -44,7 +44,7 @@ an error with the identifier `phpstanCwe.ignoreUnmatched`. Blade comments
 do not use PHPStan's built-in PHP comment parser. This rule applies the
 same identifier form only to Blade raw echoes.
 
-The rule scans views when PHPStan analyzes at least one PHP file. Use
+The rule scans views when PHPStan analyses at least one PHP file. Use
 `cwe79-blade.neon` to run only this rule. Use the `bladeDirectories`
 parameter to set other view directories. Relative paths start at the
 current working directory. For example:

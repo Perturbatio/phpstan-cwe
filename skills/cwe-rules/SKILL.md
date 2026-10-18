@@ -58,7 +58,7 @@ private const int PROBABILITY = 80;
   score is less than the minimum.
 - Make all reports with `CweReport::make()`. Do not use
   `RuleErrorBuilder` directly for a CWE report.
-- For a report in a file that PHPStan does not analyze (for example a
+- For a report in a file that PHPStan does not analyse (for example a
   Blade view), give `$file` and `$line` to `CweReport::make()`.
 - Resolve names with PHPStan when a name can refer to a different symbol.
   For example, use `ReflectionProvider` for a function in a namespace.

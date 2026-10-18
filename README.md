@@ -30,7 +30,7 @@ include `cwe79.neon`, `cwe79-blade.neon`, `cwe89.neon`, or
 `cwe89-laravel.neon` instead of `extension.neon`.
 
 The Blade rule scans `resources/views` and its child directories when the
-directory exists. It runs when PHPStan analyzes at least one PHP file.
+directory exists. It runs when PHPStan analyses at least one PHP file.
 Set other directories in `phpstan.neon` if necessary:
 
 ```neon
@@ -101,6 +101,9 @@ Run PHPStan analysis with:
 ```sh
 composer analyse
 ```
+
+The project uses `phpstan.neon.dist` to set level 8 and analyse `src`.
+This project config is not included by the package's rule configuration files.
 
 ## Run tests
 
