@@ -1,5 +1,7 @@
 # PHPStan CWE rules
 
+[![PHP Composer](https://github.com/Perturbatio/phpstan-cwe/actions/workflows/php.yml/badge.svg)](https://github.com/Perturbatio/phpstan-cwe/actions/workflows/php.yml)
+
 This package reports potential web application weaknesses during PHPStan
 analysis. The PHP rules check direct request input at HTML and SQL sinks.
 
