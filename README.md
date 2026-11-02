@@ -131,10 +131,13 @@ An example output is:
  ------ ----------------------------------------------------------------------
   Line   tests/fixtures/CWE-89/laravel.php
  ------ ----------------------------------------------------------------------
-  11     CWE-89: Unprotected dynamic value in raw SQL expression. Severity:
-         high. Probability: 80%. https://cwe.mitre.org/data/definitions/89.html
-  12     CWE-89: Unprotected dynamic value in raw SQL expression. Severity:
-         high. Probability: 80%. https://cwe.mitre.org/data/definitions/89.html
+  133    CWE-89: Request input is used in Laravel raw SQL. Use a bound parameter. Severity: high. Probability: 80%.      
+         https://cwe.mitre.org/data/definitions/89.html                                                                  
+         🪪  phpstanCwe.cwe89                                                                                            
+         at tests/fixtures/CWE-89/laravel.php:133                                                                        
+  135    CWE-89: Warning: The source of a dynamic value in Laravel raw SQL is unknown. Use a bound parameter. Severity:  
+         high. Probability: 45%. https://cwe.mitre.org/data/definitions/89.html                                          
+         🪪  phpstanCwe.cwe89      
  ------ ----------------------------------------------------------------------
 
  ------ ----------------------------------------------------------------------
