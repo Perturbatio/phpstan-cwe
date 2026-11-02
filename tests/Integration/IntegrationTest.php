@@ -8,6 +8,9 @@ use Perturbatio\PhpstanCwe\CweReport;
 use Perturbatio\PhpstanCwe\RequestInput;
 use Perturbatio\PhpstanCwe\Rules\Cwe79BladeRule;
 use Perturbatio\PhpstanCwe\Rules\Cwe79Rule;
+use Perturbatio\PhpstanCwe\Rules\Cwe78Collector;
+use Perturbatio\PhpstanCwe\Rules\Cwe78IgnoreCollector;
+use Perturbatio\PhpstanCwe\Rules\Cwe78Rule;
 use Perturbatio\PhpstanCwe\Rules\Cwe89LaravelCollector;
 use Perturbatio\PhpstanCwe\Rules\Cwe89LaravelRule;
 use Perturbatio\PhpstanCwe\Rules\Cwe89Rule;
@@ -21,6 +24,9 @@ covers(
     RequestInput::class,
     Cwe79BladeRule::class,
     Cwe79Rule::class,
+    Cwe78Collector::class,
+    Cwe78IgnoreCollector::class,
+    Cwe78Rule::class,
     Cwe89LaravelCollector::class,
     Cwe89LaravelRule::class,
     Cwe89Rule::class,
@@ -76,6 +82,10 @@ it('loads both rules with identifiers and MITRE links', function (): void {
 });
 
 it('loads a single rule when selected', function (): void {
+    $result = analyseWithConfig('cwe78.neon', 'tests/fixtures/CWE-78/cwe78.php');
+    expect(array_unique(array_column(array_values($result['files'])[0]['messages'], 'identifier')))
+        ->toBe(['phpstanCwe.cwe78']);
+
     $result = analyseWithConfig('cwe79.neon');
     $messages = array_values($result['files'])[0]['messages'];
 
@@ -85,6 +95,52 @@ it('loads a single rule when selected', function (): void {
     $messages = array_values($result['files'])[0]['messages'];
 
     expect(array_column($messages, 'identifier'))->toBe(['phpstanCwe.cwe89']);
+});
+
+it('reports command sinks with context-based ratings and source lines', function (): void {
+    $result = analyseWithConfig('cwe78.neon', 'tests/fixtures/CWE-78/cwe78.php');
+    $messages = array_values($result['files'])[0]['messages'];
+
+    expect($result['totals']['file_errors'])->toBe(12)
+        ->and(array_column($messages, 'identifier'))->toBe(array_fill(0, 12, 'phpstanCwe.cwe78'))
+        ->and(array_column($messages, 'line'))->toBe([5, 6, 8, 11, 12, 13, 14, 15, 16, 17, 19, 20])
+        ->and(array_column($messages, 'ignorable'))->toBe(array_fill(0, 12, true))
+        ->and($messages[0]['message'])->toContain('Severity: very high.', 'Probability: 95%.', 'https://cwe.mitre.org/data/definitions/78.html')
+        ->and($messages[1]['message'])->toContain('Severity: high.', 'Probability: 80%.', 'https://cwe.mitre.org/data/definitions/78.html')
+        ->and(array_column($messages, 'message'))->toBe([
+            'CWE-78: Request input is used as the full command. Use a fixed executable and safe arguments. Severity: very high. Probability: 95%. https://cwe.mitre.org/data/definitions/78.html',
+            'CWE-78: Request input changes an argument in a command with known text. Escape each argument or use a safe argument array. Severity: high. Probability: 80%. https://cwe.mitre.org/data/definitions/78.html',
+            'CWE-78: Request input reaches a command through a local assignment. Check the command and its arguments. Severity: medium. Probability: 60%. https://cwe.mitre.org/data/definitions/78.html',
+            'CWE-78: Request input reaches a command through a local assignment. Check the command and its arguments. Severity: medium. Probability: 60%. https://cwe.mitre.org/data/definitions/78.html',
+            'CWE-78: Review this command for external input and unsafe command arguments. Severity: low. Probability: 50%. https://cwe.mitre.org/data/definitions/78.html',
+            'CWE-78: Review this command for external input and unsafe command arguments. Severity: low. Probability: 50%. https://cwe.mitre.org/data/definitions/78.html',
+            'CWE-78: Request input changes an argument in a command with known text. Escape each argument or use a safe argument array. Severity: high. Probability: 80%. https://cwe.mitre.org/data/definitions/78.html',
+            'CWE-78: Request input changes an argument in a command with known text. Escape each argument or use a safe argument array. Severity: high. Probability: 80%. https://cwe.mitre.org/data/definitions/78.html',
+            'CWE-78: Request input changes an argument in a command with known text. Escape each argument or use a safe argument array. Severity: high. Probability: 80%. https://cwe.mitre.org/data/definitions/78.html',
+            'CWE-78: Review this command for external input and unsafe command arguments. Severity: low. Probability: 50%. https://cwe.mitre.org/data/definitions/78.html',
+            'CWE-78: Request input reaches a command through a local assignment. Check the command and its arguments. Severity: medium. Probability: 60%. https://cwe.mitre.org/data/definitions/78.html',
+            'CWE-78: Request input is used as the full command. Use a fixed executable and safe arguments. Severity: very high. Probability: 95%. https://cwe.mitre.org/data/definitions/78.html',
+        ]);
+});
+
+it('filters CWE-78 findings below the configured probability', function (): void {
+    $result = analyseWithConfig('tests/fixtures/CWE-78/filtered.neon', 'tests/fixtures/CWE-78/cwe78.php');
+    $messages = array_values($result['files'])[0]['messages'];
+
+    expect($result['totals']['file_errors'])->toBe(2)
+        ->and(array_column($messages, 'identifier'))->toBe(['phpstanCwe.cwe78', 'phpstanCwe.cwe78'])
+        ->and(array_column($messages, 'line'))->toBe([5, 20])
+        ->and(array_column($messages, 'message'))->each->toContain('Probability: 95%.');
+});
+
+it('requires at least two words in a CWE-78 ignore reason', function (): void {
+    $result = analyseWithConfig('cwe78.neon', 'tests/fixtures/CWE-78/ignore.php');
+    $messages = array_values($result['files'])[0]['messages'];
+
+    expect($result['totals']['file_errors'])->toBe(1)
+        ->and(array_column($messages, 'identifier'))->toBe(['phpstanCwe.ignoreReason'])
+        ->and(array_column($messages, 'line'))->toBe([3])
+        ->and($messages[0]['message'])->toBe('CWE-78 ignore requires a reason with at least two words.');
 });
 
 it('loads the Laravel SQL rule from its public configuration', function (): void {

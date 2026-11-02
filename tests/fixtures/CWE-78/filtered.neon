@@ -1,0 +1,6 @@
+includes:
+    - ../../../cwe78.neon
+
+parameters:
+    phpstanCwe:
+        minProbability: 81

@@ -4,6 +4,8 @@
 
 This package reports potential web application weaknesses during PHPStan
 analysis. The PHP rules check direct request input at HTML and SQL sinks.
+The CWE-78 rule reports command execution calls for review, follows simple
+local assignments, and ranks direct request input by severity and probability.
 
 The Laravel SQL rule checks dynamic values in raw Eloquent and Query Builder
 expressions and `DB::select()`. It follows simple local assignments. It also
@@ -34,8 +36,9 @@ includes:
 ```
 
 The default file enables all the rules. To use one rule,
-include the specific rule, e.g. `cwe79.neon`, `cwe79-blade.neon`, `cwe89.neon`, or
-`cwe89-laravel.neon` instead of `extension.neon`.
+include the specific rule, e.g. `cwe78.neon`, `cwe79.neon`,
+`cwe79-blade.neon`, `cwe89.neon`, or `cwe89-laravel.neon` instead of
+`extension.neon`.
 
 If you want to include all rules but ignore a specific rule.
 You cannot exclude a specific rule once loaded, so it will still be processed by PHPStan, but you _can_ ignore the errors it produces.
@@ -97,11 +100,13 @@ harm is high.
 
 Each report gives a CWE number, a reason, a severity, a probability score,
 and a link to the MITRE CWE site. Reports are ignorable PHPStan errors.
-The stable identifiers are `phpstanCwe.cwe79` and `phpstanCwe.cwe89`.
-Both CWE-89 rules use `phpstanCwe.cwe89`.
+The stable identifiers are `phpstanCwe.cwe78`, `phpstanCwe.cwe79`, and
+`phpstanCwe.cwe89`. Both CWE-89 rules use `phpstanCwe.cwe89`. CWE-78 ignore
+comments must include a reason with at least two words. A short reason is
+reported with `phpstanCwe.ignoreReason`.
 The same data is in the PHPStan error metadata.
 
-Read [CWE-79](src/Rules/Cwe79Rule.md) and
+Read [CWE-78](src/Rules/Cwe78Rule.md), [CWE-79](src/Rules/Cwe79Rule.md) and
 [CWE-79 in Blade](src/Rules/Cwe79BladeRule.md) and
 [CWE-89](src/Rules/Cwe89Rule.md) and
 [CWE-89 in Laravel query builders](src/Rules/Cwe89LaravelRule.md) for
@@ -161,8 +166,9 @@ This project config is not included by the package's rule configuration files.
 
 Tests in `tests/Unit` check the scanner and report data. Tests in
 `tests/Integration` run rules with PHPStan. Rule fixtures are in
-`tests/fixtures/CWE-79` and `tests/fixtures/CWE-89`. The fixture used by
-both rules is in `tests/fixtures/shared`.
+`tests/fixtures/CWE-78`, `tests/fixtures/CWE-79`, and
+`tests/fixtures/CWE-89`. The fixture used by multiple rules is in
+`tests/fixtures/shared`.
 
 ```sh
 vendor/bin/pest
