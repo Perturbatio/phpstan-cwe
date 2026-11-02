@@ -32,11 +32,13 @@ class Cwe89LaravelRuleTestCase extends RuleTestCase
         }
         $node = new CollectedDataNode($collectedData, false);
 
-        return $this->getRule()->processNode($node, $this->createMock(Scope::class));
+        return $this->getRule()->processNode($node, $this->createStub(Scope::class));
     }
 }
 
 uses(Cwe89LaravelRuleTestCase::class);
+
+covers(Cwe89LaravelRule::class, Cwe89LaravelCollector::class);
 
 it('reports a known request source traced through a local assignment', function (): void {
     $file = __DIR__ . '/../fixtures/CWE-89/laravel.php';
@@ -109,7 +111,7 @@ it('does not report a static Laravel raw SQL expression', function (): void {
 });
 
 it('recognizes the Laravel DB global alias without a use statement', function (): void {
-    $scope = $this->createMock(Scope::class);
+    $scope = $this->createStub(Scope::class);
     $scope->method('resolveName')->willReturn('App\\DB');
     $scope->method('getFile')->willReturn('/tmp/laravel.php');
     $call = new StaticCall(
@@ -125,7 +127,7 @@ it('recognizes the Laravel DB global alias without a use statement', function ()
 });
 
 it('checks each supported database facade query method', function (): void {
-    $scope = $this->createMock(Scope::class);
+    $scope = $this->createStub(Scope::class);
     $scope->method('resolveName')->willReturn('Illuminate\\Support\\Facades\\DB');
     $scope->method('getFile')->willReturn('/tmp/laravel.php');
     $collector = new Cwe89LaravelCollector();
@@ -169,4 +171,9 @@ it('filters reports below the configured probability minimum', function (): void
 
 it('returns the correct node type for the rule', function (): void {
     expect($this->getRule()->getNodeType())->toBe(CollectedDataNode::class);
+});
+
+it('uses the expected default probabilities', function (): void {
+    expect(Cwe89LaravelRule::getRequestProbability())->toBe(80)
+        ->and(Cwe89LaravelRule::getUnknownProbability())->toBe(45);
 });

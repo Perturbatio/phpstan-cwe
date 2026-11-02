@@ -17,12 +17,20 @@ use PHPStan\Rules\Rule;
 final class Cwe89LaravelRule implements Rule
 {
     private const string SEVERITY = 'high';
-    private const int REQUEST_PROBABILITY = 80;
-    private const int UNKNOWN_PROBABILITY = 45;
 
     public function __construct(private readonly int $minProbability = 0)
     {
-        CweReport::isEnabled($minProbability, self::REQUEST_PROBABILITY);
+        CweReport::isEnabled($minProbability, self::getRequestProbability());
+    }
+
+    public static function getRequestProbability(): int
+    {
+        return 80;
+    }
+
+    public static function getUnknownProbability(): int
+    {
+        return 45;
     }
 
     public function getNodeType(): string
@@ -66,7 +74,7 @@ final class Cwe89LaravelRule implements Rule
             }
 
             $isKnownRequest = ($status & 2) !== 0;
-            $probability = $isKnownRequest ? self::REQUEST_PROBABILITY : self::UNKNOWN_PROBABILITY;
+            $probability = $isKnownRequest ? self::getRequestProbability() : self::getUnknownProbability();
             if (!CweReport::isEnabled($this->minProbability, $probability)) {
                 continue;
             }

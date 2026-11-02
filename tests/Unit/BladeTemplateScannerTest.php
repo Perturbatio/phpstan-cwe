@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 use Perturbatio\PhpstanCwe\Blade\BladeTemplateScanner;
 
+covers(BladeTemplateScanner::class);
+
 it('finds raw Blade values and keeps template line numbers', function (): void {
     $directory = __DIR__ . '/../fixtures/CWE-79/blade/views';
     $findings = (new BladeTemplateScanner())->scan([$directory]);

@@ -17,13 +17,17 @@ use PHPStan\Rules\Rule;
 final class Cwe79Rule implements Rule
 {
     private const string SEVERITY = 'high';
-    private const int PROBABILITY = 80;
 
     public function __construct(
         private readonly ReflectionProvider $reflectionProvider,
         private readonly int $minProbability = 0,
     ) {
-        CweReport::isEnabled($minProbability, self::PROBABILITY);
+        CweReport::isEnabled($minProbability, self::getProbability());
+    }
+
+    public static function getProbability(): int
+    {
+        return 80;
     }
 
     public function getNodeType(): string
@@ -33,7 +37,7 @@ final class Cwe79Rule implements Rule
 
     public function processNode(Node $node, Scope $scope): array
     {
-        if (!CweReport::isEnabled($this->minProbability, self::PROBABILITY)) {
+        if (!CweReport::isEnabled($this->minProbability, self::getProbability())) {
             return [];
         }
 
@@ -48,7 +52,7 @@ final class Cwe79Rule implements Rule
         // Check output text here. This rule does not follow assigned values.
         foreach ($expressions as $expression) {
             if (RequestInput::inHtml($expression, $scope, $this->reflectionProvider)) {
-                return [CweReport::make(79, 'Request input is sent to HTML without an HTML escape call.', self::SEVERITY, self::PROBABILITY)];
+                return [CweReport::make(79, 'Request input is sent to HTML without an HTML escape call.', self::SEVERITY, self::getProbability())];
             }
         }
 

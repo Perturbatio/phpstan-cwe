@@ -23,11 +23,15 @@ use PHPStan\Type\ObjectType;
 final class Cwe89Rule implements Rule
 {
     private const string SEVERITY = 'high';
-    private const int PROBABILITY = 80;
 
     public function __construct(private readonly int $minProbability = 0)
     {
-        CweReport::isEnabled($minProbability, self::PROBABILITY);
+        CweReport::isEnabled($minProbability, self::getProbability());
+    }
+
+    public static function getProbability(): int
+    {
+        return 80;
     }
 
     public function getNodeType(): string
@@ -37,7 +41,7 @@ final class Cwe89Rule implements Rule
 
     public function processNode(Node $node, Scope $scope): array
     {
-        if (!CweReport::isEnabled($this->minProbability, self::PROBABILITY)) {
+        if (!CweReport::isEnabled($this->getMinProbability(), self::getProbability())) {
             return [];
         }
 
@@ -47,7 +51,7 @@ final class Cwe89Rule implements Rule
             return [];
         }
 
-        return [CweReport::make(89, 'Request input is used in a SQL query. Use a bound parameter.', self::SEVERITY, self::PROBABILITY)];
+        return [CweReport::make(89, 'Request input is used in a SQL query. Use a bound parameter.', self::SEVERITY, self::getProbability())];
     }
 
     private function getQuery(Node $node, Scope $scope): ?Expr
@@ -97,5 +101,10 @@ final class Cwe89Rule implements Rule
         }
 
         return null;
+    }
+
+    private function getMinProbability(): int
+    {
+        return $this->minProbability;
     }
 }

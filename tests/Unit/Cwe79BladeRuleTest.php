@@ -9,6 +9,8 @@ use PHPStan\Analyser\Scope;
 use PHPStan\Node\CollectedDataNode;
 use PHPStan\Rules\IdentifierRuleError;
 
+covers(Cwe79BladeRule::class);
+
 function bladeRuleNode(bool $hasAnalysedFiles): CollectedDataNode
 {
     $collectedData = $hasAnalysedFiles
@@ -25,19 +27,23 @@ it('reports raw echoes and unmatched ignore comments from analysed files', funct
     ];
     $rule = new Cwe79BladeRule(new BladeTemplateScanner(), $directories);
 
-    $errors = $rule->processNode(bladeRuleNode(true), $this->createMock(Scope::class));
+    $errors = $rule->processNode(bladeRuleNode(true), $this->createStub(Scope::class));
     $identifiers = array_map(
         static fn (IdentifierRuleError $error): ?string => $error->getIdentifier(),
         $errors,
     );
 
     expect($rule->getNodeType())->toBe(CollectedDataNode::class)
-        ->and($identifiers)->toContain('phpstanCwe.cwe79', 'phpstanCwe.ignoreUnmatched');
+        ->and($identifiers)->toContain('phpstanCwe.cwe79', 'phpstanCwe.ignoreUnmatched')
+        ->and(Cwe79BladeRule::getProbability())->toBe(80)
+        ->and(Cwe79BladeRule::getIgnoreTip())->toBe(
+            'Only if you are sure that this value is safe HTML, put {{-- @phpstan-ignore phpstanCwe.cwe79 (Reason) --}} immediately BEFORE this raw echo. Replace "Reason" with the reason.',
+        );
 });
 
 it('skips scans without analysed files and below the probability minimum', function (): void {
     $invalidDirectory = __DIR__ . '/../fixtures/CWE-79/missing';
-    $scope = $this->createMock(Scope::class);
+    $scope = $this->createStub(Scope::class);
     $enabledRule = new Cwe79BladeRule(new BladeTemplateScanner(), [$invalidDirectory]);
     $disabledRule = new Cwe79BladeRule(new BladeTemplateScanner(), [$invalidDirectory], 81);
 

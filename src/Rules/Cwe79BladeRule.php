@@ -16,11 +16,6 @@ use PHPStan\Rules\Rule;
 final class Cwe79BladeRule implements Rule
 {
     private const string SEVERITY = 'high';
-    private const int PROBABILITY = 80;
-    // Tell the developer to check the value before they ignore the report.
-    private const string IGNORE_TIP = 'Only if you are sure that this value is safe HTML, put '
-        . '{{-- @phpstan-ignore phpstanCwe.cwe79 (Reason) --}} immediately BEFORE this raw echo. '
-        . 'Replace "Reason" with the reason.';
 
     /** @param list<string> $directories */
     public function __construct(
@@ -28,7 +23,19 @@ final class Cwe79BladeRule implements Rule
         private readonly array $directories,
         private readonly int $minProbability = 0,
     ) {
-        CweReport::isEnabled($minProbability, self::PROBABILITY);
+        CweReport::isEnabled($minProbability, self::getProbability());
+    }
+
+    public static function getProbability(): int
+    {
+        return 80;
+    }
+
+    public static function getIgnoreTip(): string
+    {
+        return 'Only if you are sure that this value is safe HTML, put '
+            . '{{-- @phpstan-ignore phpstanCwe.cwe79 (Reason) --}} immediately BEFORE this raw echo. '
+            . 'Replace "Reason" with the reason.';
     }
 
     public function getNodeType(): string
@@ -39,7 +46,7 @@ final class Cwe79BladeRule implements Rule
     public function processNode(Node $node, Scope $scope): array
     {
         if ($node->get(AnalysedFileCollector::class) === []
-            || !CweReport::isEnabled($this->minProbability, self::PROBABILITY)
+            || !CweReport::isEnabled($this->minProbability, self::getProbability())
         ) {
             return [];
         }
@@ -59,10 +66,10 @@ final class Cwe79BladeRule implements Rule
                 79,
                 'A Blade raw echo prints a value without HTML escape.',
                 self::SEVERITY,
-                self::PROBABILITY,
+                self::getProbability(),
                 $finding['file'],
                 $finding['line'],
-                self::IGNORE_TIP,
+                self::getIgnoreTip(),
             );
         }
 

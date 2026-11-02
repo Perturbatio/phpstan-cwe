@@ -2,6 +2,30 @@
 
 declare(strict_types=1);
 
+use Perturbatio\PhpstanCwe\Blade\AnalysedFileCollector;
+use Perturbatio\PhpstanCwe\Blade\BladeTemplateScanner;
+use Perturbatio\PhpstanCwe\CweReport;
+use Perturbatio\PhpstanCwe\RequestInput;
+use Perturbatio\PhpstanCwe\Rules\Cwe79BladeRule;
+use Perturbatio\PhpstanCwe\Rules\Cwe79Rule;
+use Perturbatio\PhpstanCwe\Rules\Cwe89LaravelCollector;
+use Perturbatio\PhpstanCwe\Rules\Cwe89LaravelRule;
+use Perturbatio\PhpstanCwe\Rules\Cwe89Rule;
+
+// These tests check the package in a separate PHPStan process.
+// Pest does not collect coverage from that process.
+covers(
+    AnalysedFileCollector::class,
+    BladeTemplateScanner::class,
+    CweReport::class,
+    RequestInput::class,
+    Cwe79BladeRule::class,
+    Cwe79Rule::class,
+    Cwe89LaravelCollector::class,
+    Cwe89LaravelRule::class,
+    Cwe89Rule::class,
+);
+
 function analyseWithConfig(string $config, string $fixture = 'tests/fixtures/shared/integration.php'): array
 {
     $root = dirname(__DIR__, 2);
@@ -68,23 +92,25 @@ it('loads the Laravel SQL rule from its public configuration', function (): void
     $messages = array_values($result['files'])[0]['messages'];
     $expectedRequestMessage = 'CWE-89: Request input is used in Laravel raw SQL. Use a bound parameter. Severity: high. Probability: 80%. https://cwe.mitre.org/data/definitions/89.html';
     $expectedUnknownMessage = 'CWE-89: Warning: The source of a dynamic value in Laravel raw SQL is unknown. Use a bound parameter. Severity: high. Probability: 45%. https://cwe.mitre.org/data/definitions/89.html';
-    // The indices (zero-based) of messages that are expected to have the unknown source message
-    $unknownSourceMessageIndices = [11, 12, 17, 18, 19, 20];
+    // These message positions start at zero. Each one needs the warning
+    // for an unknown source, not the message for known request input.
+    $unknownSourceMessageIndices = [11, 12, 17, 18, 19, 20, 23, 24, 25, 26, 27];
 
-    // And those that are expected to have the request input message
-    $requestInputMessageIndices = [
-        120, 121, 122, 123, 124,
-        125, 126, 127, 128, 131,
-        132, 134, 135, 141, 143,
-        145, 147, 151, 152, 156,
-        157
+    // List report lines only. A report on a protected example fails this test.
+    $expectedReportLines = [
+        121, 122, 123, 124, 125,
+        126, 127, 128, 129, 132,
+        133, 135, 136, 142, 144,
+        146, 148, 152, 153, 157,
+        158, 229, 230, 231, 232,
+        233, 235, 241,
     ];
-    expect($result['totals']['file_errors'])->toBe(21)
+    expect($result['totals']['file_errors'])->toBe(28)
         ->and(array_keys($result['files']))
         ->toBe([dirname(__DIR__, 2).'/tests/fixtures/CWE-89/laravel.php'])
         ->and(array_unique(array_column($messages, 'identifier')))
         ->toBe(['phpstanCwe.cwe89'])
-        ->and(array_column($messages, 'line'))->toBe($requestInputMessageIndices);
+        ->and(array_column($messages, 'line'))->toBe($expectedReportLines);
     foreach ($messages as $index => $message) {
         expect($message['message'])->toBe(in_array($index, $unknownSourceMessageIndices, true)
             ? $expectedUnknownMessage

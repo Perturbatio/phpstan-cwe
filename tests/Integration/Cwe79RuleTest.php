@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Perturbatio\PhpstanCwe\Rules\Cwe79Rule;
+use Perturbatio\PhpstanCwe\RequestInput;
 use PhpParser\Node;
 use PHPStan\Reflection\ReflectionProvider;
 use PHPStan\Rules\Rule;
@@ -40,11 +41,13 @@ class Cwe79RuleTestCase extends RuleTestCase
 
     public function processNodeDirectly(Node $node): array
     {
-        return $this->getRule()->processNode($node, $this->createMock(PHPStan\Analyser\Scope::class));
+        return $this->getRule()->processNode($node, $this->createStub(PHPStan\Analyser\Scope::class));
     }
 }
 
 uses(Cwe79RuleTestCase::class);
+
+covers(Cwe79Rule::class, RequestInput::class);
 
 it('reports direct HTML output but not escaped or numeric output', function (): void {
     $message = 'CWE-79: Request input is sent to HTML without an HTML escape call. Severity: high. Probability: 80%. https://cwe.mitre.org/data/definitions/79.html';
@@ -64,6 +67,10 @@ it('rejects a probability minimum outside the valid range', function (): void {
 
 it('filters reports below the configured probability minimum', function (): void {
     $this->checkFixtureAtMinimumProbability(81, []);
+});
+
+it('uses a default probability of 80', function (): void {
+    expect(Cwe79Rule::getProbability())->toBe(80);
 });
 
 it('does not trust a custom function with an HTML escape function name', function (): void {

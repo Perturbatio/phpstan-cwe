@@ -52,6 +52,7 @@ namespace Illuminate\Database\Query {
     class Builder
     {
         use RawQueryMethods;
+        use GrammarMethods;
     }
 }
 
@@ -157,4 +158,86 @@ namespace {
         $queryBuilder->whereRaw("name = '" . $name); // Report: same variable used in a different SQL sink, still unknown
 
     }
+}
+
+namespace Illuminate\Database {
+    // These test classes provide types for PHPStan. They do not execute SQL
+    // or test Laravel's identifier quoting implementation.
+    abstract class Grammar
+    {
+        public function wrap(mixed $value): string
+        {
+            return '';
+        }
+    }
+}
+
+namespace Illuminate\Database\Query\Grammars {
+    class Grammar extends \Illuminate\Database\Grammar
+    {
+    }
+}
+
+namespace Illuminate\Database\Query {
+    trait GrammarMethods
+    {
+        public function getGrammar(): Grammars\Grammar
+        {
+            return new Grammars\Grammar();
+        }
+
+        /**
+         * Laravel binds the macro closure to a builder instance.
+         * This tag gives PHPStan the same type for $this.
+         *
+         * @param-closure-this Builder $macro
+         */
+        public static function macro(string $name, \Closure $macro): void
+        {
+        }
+    }
+
+    // Laravel can return this object from wrap() without identifier quoting.
+    class Expression
+    {
+        public function __construct(public mixed $value)
+        {
+        }
+    }
+}
+
+namespace {
+    use Illuminate\Database\Query\Builder as QueryBuilder;
+    use Illuminate\Database\Query\Expression;
+
+    // A macro adds a method to Laravel's query builder.
+    // Quote the column as an identifier. Bind the search value separately.
+    QueryBuilder::macro('__orWhereSetContains', function (string $column, string|int $value): QueryBuilder {
+        /** @var QueryBuilder $this */
+        $wrappedColumn = $this->getGrammar()->wrap($column);
+
+        return $this->orWhereRaw("FIND_IN_SET(?, {$wrappedColumn})", [$value]); // No report: The column is wrapped and the value is bound.
+    });
+
+    // Check both accepted uses and cases where wrap() is not enough.
+    function checkWrappedColumns(QueryBuilder $builder, string $column, string $value, mixed $unknownColumn, string|Expression $possibleExpression): void
+    {
+        $grammar = $builder->getGrammar();
+        $wrappedColumn = $grammar->wrap($column);
+        $builder->whereRaw($wrappedColumn . ' = ?', [$value]); // No report: A local variable holds the wrapped column.
+        $builder->whereRaw($grammar->wrap(value: $column) . ' = ?', [$value]); // No report: The named column argument is wrapped.
+        $builder->whereRaw($grammar->wrap($_GET['column']) . ' = ?', [$value]); // Report: The column type can include a raw expression.
+        $builder->whereRaw($wrappedColumn . ' = ' . $_GET['value']); // Report: Wrapping the column does not protect the value.
+        $builder->whereRaw($grammar->wrap($unknownColumn) . ' = ?', [$value]); // Report: The column type is unknown.
+        $builder->whereRaw($grammar->wrap(new Expression($value)) . ' = ?'); // Report: Wrapping does not escape a raw expression.
+        $builder->whereRaw($grammar->wrap($possibleExpression) . ' = ?', [$value]); // Report: The column can be a raw expression.
+        $wrappedColumn .= $value;
+        $builder->whereRaw($wrappedColumn . ' = ?', [$value]); // Report: An unbound value was added after wrapping.
+    }
+
+    // Binding the search value does not protect an unwrapped column.
+    QueryBuilder::macro('__orWhereSetContainsUnwrapped', function (string $column, string|int $value): QueryBuilder {
+        /** @var QueryBuilder $this */
+        return $this->orWhereRaw("FIND_IN_SET(?, {$column})", [$value]); // Report: The column is not wrapped.
+    });
 }

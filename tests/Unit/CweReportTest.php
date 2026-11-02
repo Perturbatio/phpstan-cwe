@@ -8,6 +8,8 @@ use PHPStan\Rules\LineRuleError;
 use PHPStan\Rules\MetadataRuleError;
 use PHPStan\Rules\TipRuleError;
 
+covers(CweReport::class);
+
 it('keeps severity, score, link, and identifier in the report', function (): void {
     $report = CweReport::make(79, 'Direct input is in HTML.', 'high', 80);
 
@@ -51,3 +53,8 @@ it('includes scores at the minimum and excludes lower scores', function (): void
         ->and(CweReport::isEnabled(81, 80))->toBeFalse()
         ->and(CweReport::isEnabled(100, 100))->toBeTrue();
 });
+
+it('rejects a probability minimum outside the valid range', function (int $minimumProbability): void {
+    expect(fn () => CweReport::isEnabled($minimumProbability, 80))
+        ->toThrow(InvalidArgumentException::class, 'phpstanCwe.minProbability must be from 0 to 100.');
+})->with([-1, 101]);

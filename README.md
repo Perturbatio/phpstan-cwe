@@ -2,13 +2,19 @@
 
 This package reports potential web application weaknesses during PHPStan
 analysis. The PHP rules check direct request input at HTML and SQL sinks.
+
 The Laravel SQL rule checks dynamic values in raw Eloquent and Query Builder
 expressions and `DB::select()`. It follows simple local assignments. It also
 reports dynamic values with an unknown source at a lower probability score.
+
 The Blade rule checks raw output tags in templates. The PHP rules do not
 trace data flow through variables or functions. The Laravel SQL rule reports
 dynamic values without deciding whether their source is safe. Use other
 security checks and code review with these rules.
+
+> [!NOTE]
+> This package cannot cater for all possible ways a CWE can be exploited,
+> but it does provide some useful checks.
 
 ## Install
 
@@ -25,9 +31,26 @@ includes:
     - vendor/perturbatio/phpstan-cwe/extension.neon
 ```
 
-The default file enables the PHP rules and the Blade rule. To use one rule,
-include `cwe79.neon`, `cwe79-blade.neon`, `cwe89.neon`, or
+The default file enables all the rules. To use one rule,
+include the specific rule, e.g. `cwe79.neon`, `cwe79-blade.neon`, `cwe89.neon`, or
 `cwe89-laravel.neon` instead of `extension.neon`.
+
+If you want to include all rules but ignore a specific rule.
+You cannot exclude a specific rule once loaded, so it will still be processed by PHPStan, but you _can_ ignore the errors it produces.
+
+In this case, add the following to your `phpstan.neon`
+```neon
+parameters:
+    ignoreErrors:
+        -
+            identifier: phpstanCwe.cwe79 # ignore CWE-79 reports
+```
+
+This is *probably* safer than only building a set of rules you want to use, 
+because it will still report any new CWE rules added in future versions of this package.
+
+And at the very least, you'll have a record of the CWE rules you have chosen to ignore, 
+so you can review them later.
 
 The Blade rule scans `resources/views` and its child directories when the
 directory exists. It runs when PHPStan analyses at least one PHP file.
@@ -102,7 +125,31 @@ Run PHPStan analysis with:
 composer analyse
 ```
 
-The project uses `phpstan.neon.dist` to set level 8 and analyse `src`.
+An example output is:
+
+```text
+ ------ ----------------------------------------------------------------------
+  Line   tests/fixtures/CWE-89/laravel.php
+ ------ ----------------------------------------------------------------------
+  11     CWE-89: Unprotected dynamic value in raw SQL expression. Severity:
+         high. Probability: 80%. https://cwe.mitre.org/data/definitions/89.html
+  12     CWE-89: Unprotected dynamic value in raw SQL expression. Severity:
+         high. Probability: 80%. https://cwe.mitre.org/data/definitions/89.html
+ ------ ----------------------------------------------------------------------
+
+ ------ ----------------------------------------------------------------------
+  Line   app/services/UpdateProfile.php                                                                                                                                                           
+ ------ ----------------------------------------------------------------------
+  80     CWE-89: Warning: The source of a dynamic value in Laravel raw SQL
+         is unknown.
+         Use a bound parameter. Severity: high. Probability: 45%. 
+         https://cwe.mitre.org/data/definitions/89.html  
+         🪪  phpstanCwe.cwe89                                                                                                                                                                   
+         at app/services/UpdateProfile.php:80                                                                                                                                                          
+ ------ -----------------------------------------------------------------------
+```
+
+The project uses `phpstan.neon.dist` to set level 10 and analyse `src`.
 This project config is not included by the package's rule configuration files.
 
 ## Run tests
@@ -116,4 +163,35 @@ both rules is in `tests/fixtures/shared`.
 vendor/bin/pest
 vendor/bin/pest --testsuite Unit
 vendor/bin/pest --testsuite Integration
+```
+
+## How do I fix an error?
+
+Example error:
+
+```text
+CWE-89: Unprotected dynamic value in raw SQL expression. Severity: high. Probability: 80%. https://cwe.mitre.org/data/definitions/89.html
+```
+Example code that causes the error:
+```PHP
+DB::select("SELECT * FROM users WHERE username = '$user' AND password = '$password'");
+```
+Fix:
+```PHP
+DB::select(
+    'SELECT * FROM users WHERE username = ? AND password = ?',
+    [$user, $password],
+);
+```
+
+selectRaw example:
+
+Example code that causes the error:
+```PHP
+$query->selectRaw("DATE_FORMAT(created_at, '{$format}') as {$alias}")
+```
+
+Fix:
+```PHP
+$query->selectRaw("DATE_FORMAT(created_at, '?') as ?", [$format, $alias]);
 ```

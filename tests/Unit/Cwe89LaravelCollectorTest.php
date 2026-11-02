@@ -23,7 +23,9 @@ use PHPStan\Rules\Rule;
 use PHPStan\Testing\RuleTestCase;
 use PHPStan\Type\MixedType;
 use PHPStan\Type\ObjectType;
+use PHPStan\Type\StringType;
 use PHPStan\Type\Type;
+use PHPStan\Type\UnionType;
 
 class Cwe89LaravelCollectorTestCase extends RuleTestCase
 {
@@ -35,11 +37,13 @@ class Cwe89LaravelCollectorTestCase extends RuleTestCase
 
 uses(Cwe89LaravelCollectorTestCase::class);
 
+covers(Cwe89LaravelCollector::class);
+
 function cwe89LaravelCollectorScope(
     string $resolvedName = 'Illuminate\\Support\\Facades\\DB',
     ?Type $receiverType = null,
 ): Scope {
-    $scope = test()->createMock(Scope::class);
+    $scope = test()->createStub(Scope::class);
     $scope->method('getFile')->willReturn('/tmp/laravel.php');
     $scope->method('resolveName')->willReturn($resolvedName);
     $scope->method('getType')->willReturn($receiverType ?? new MixedType());
@@ -55,6 +59,28 @@ it('exposes its node type and ignores nodes that are not SQL sinks', function ()
             new FuncCall(new Name('ordinaryFunction')),
             cwe89LaravelCollectorScope(),
         ))->toBeNull();
+});
+
+it('provides the supported Laravel classes, methods, and request variables', function (): void {
+    expect(Cwe89LaravelCollector::getBuilderClasses())->toBe([
+        'Illuminate\Database\Eloquent\Builder',
+        'Illuminate\Database\Eloquent\Relations\Relation',
+        'Illuminate\Database\Query\Builder',
+    ])->and(Cwe89LaravelCollector::getRawMethods())->toBe([
+        'fromraw',
+        'groupbyraw',
+        'havingraw',
+        'orhavingraw',
+        'orwhereraw',
+        'orderbyraw',
+        'selectraw',
+        'whereraw',
+    ])->and(Cwe89LaravelCollector::getRequestVariables())->toBe([
+        '_GET',
+        '_POST',
+        '_COOKIE',
+        '_REQUEST',
+    ]);
 });
 
 it('collects assignments and tracks dynamic concatenation values', function (): void {
@@ -381,3 +407,54 @@ it('combines request and variable facts in compound expressions', function (): v
         'variables' => ['suffix'],
     ]);
 });
+
+it('accepts grammar wrapping only for string arguments on a Laravel grammar', function (
+    Type $receiverType,
+    Type $argumentType,
+    string $method,
+    ?string $argumentName,
+    bool $hasArgument,
+    bool $isProtected,
+): void {
+    $column = new Variable('column');
+    $grammar = new Variable('grammar');
+    $scope = $this->createStub(Scope::class);
+    $scope->method('getFile')->willReturn('/tmp/laravel.php');
+    // Give each expression its test type without loading Laravel.
+    $scope->method('getType')->willReturnCallback(
+        static fn (Expr $expression): Type => $expression === $grammar ? $receiverType : $argumentType,
+    );
+    $arguments = $hasArgument
+        ? [new Arg($column, name: $argumentName === null ? null : new Identifier($argumentName))]
+        : [];
+    // Collect an assignment to check the facts stored for later SQL calls.
+    $event = (new Cwe89LaravelCollector())->processNode(
+        new Assign(
+            new Variable('wrappedColumn'),
+            new MethodCall($grammar, new Identifier($method), $arguments),
+        ),
+        $scope,
+    );
+
+    // A protected result must not retain its input variables as SQL sources.
+    expect($event)->toMatchArray([
+        'dynamic' => !$isProtected,
+        'request' => false,
+        'unknown' => !$isProtected,
+        'variables' => $isProtected ? [] : ($hasArgument ? ['grammar', 'column'] : ['grammar']),
+    ]);
+})->with([
+    // These cases use Laravel identifier quoting with a string argument.
+    'string column' => [new ObjectType('Illuminate\Database\Grammar'), new StringType(), 'wrap', null, true, true],
+    'named column' => [new ObjectType('Illuminate\Database\Grammar'), new StringType(), 'wrap', 'value', true, true],
+    'method case' => [new ObjectType('Illuminate\Database\Grammar'), new StringType(), 'WRAP', null, true, true],
+    // These cases do not prove that Laravel quotes the input as an identifier.
+    'raw expression' => [new ObjectType('Illuminate\Database\Grammar'), new ObjectType('Illuminate\Database\Query\Expression'), 'wrap', null, true, false],
+    'possible raw expression' => [new ObjectType('Illuminate\Database\Grammar'), new UnionType([new StringType(), new ObjectType('Illuminate\Database\Query\Expression')]), 'wrap', null, true, false],
+    'unknown argument' => [new ObjectType('Illuminate\Database\Grammar'), new MixedType(), 'wrap', null, true, false],
+    'other receiver' => [new ObjectType('stdClass'), new StringType(), 'wrap', null, true, false],
+    'unknown receiver' => [new MixedType(), new StringType(), 'wrap', null, true, false],
+    'other method' => [new ObjectType('Illuminate\Database\Grammar'), new StringType(), 'quoteString', null, true, false],
+    'no argument' => [new ObjectType('Illuminate\Database\Grammar'), new StringType(), 'wrap', null, false, false],
+    'wrong named argument' => [new ObjectType('Illuminate\Database\Grammar'), new StringType(), 'wrap', 'other', true, false],
+]);

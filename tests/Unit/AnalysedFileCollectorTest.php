@@ -6,9 +6,11 @@ use Perturbatio\PhpstanCwe\Blade\AnalysedFileCollector;
 use PHPStan\Analyser\Scope;
 use PHPStan\Node\FileNode;
 
+covers(AnalysedFileCollector::class);
+
 it('collects analysed PHP files', function (): void {
     $collector = new AnalysedFileCollector();
 
     expect($collector->getNodeType())->toBe(FileNode::class)
-        ->and($collector->processNode(new FileNode([]), $this->createMock(Scope::class)))->toBeTrue();
+        ->and($collector->processNode(new FileNode([]), $this->createStub(Scope::class)))->toBeTrue();
 });

@@ -61,9 +61,22 @@ it('returns all', function () {
 | `assertNotFound()` | `assertStatus(404)` |
 | `assertForbidden()` | `assertStatus(403)` |
 
-## Mocking
+## Stubs and mocks
 
-Import mock function before use: `use function Pest\Laravel\mock;`
+Stubs and mocks are both test doubles. Use stubs by default.
+
+- Use `$this->createStub()` when a dependency only needs to supply return values
+  or satisfy a parameter type.
+- Configure return values with `method()->willReturn()` or
+  `method()->willReturnCallback()`.
+- Use `$this->createMock()` only when the test must check method calls. Add
+  explicit `expects()` expectations for those calls.
+- Replace mocks without expectations with stubs. Do not add call expectations
+  only to remove a notice.
+- Do not suppress these notices with `AllowMockObjectsWithoutExpectations`.
+
+For Laravel tests that need a mock, import it before use:
+`use function Pest\Laravel\mock;`.
 
 ## Datasets
 

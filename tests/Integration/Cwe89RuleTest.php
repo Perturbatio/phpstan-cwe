@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Perturbatio\PhpstanCwe\Rules\Cwe89Rule;
+use Perturbatio\PhpstanCwe\RequestInput;
 use PhpParser\Node;
 use PHPStan\Rules\Rule;
 use PHPStan\Testing\RuleTestCase;
@@ -29,11 +30,13 @@ class Cwe89RuleTestCase extends RuleTestCase
 
     public function processNodeDirectly(Node $node): array
     {
-        return $this->getRule()->processNode($node, $this->createMock(PHPStan\Analyser\Scope::class));
+        return $this->getRule()->processNode($node, $this->createStub(PHPStan\Analyser\Scope::class));
     }
 }
 
 uses(Cwe89RuleTestCase::class);
+
+covers(Cwe89Rule::class, RequestInput::class);
 
 it('reports direct SQL input but not bound or numeric input', function (): void {
     $message = 'CWE-89: Request input is used in a SQL query. Use a bound parameter. Severity: high. Probability: 80%. https://cwe.mitre.org/data/definitions/89.html';
@@ -69,4 +72,13 @@ it('ignores placeholder and missing query arguments', function (): void {
 
     expect($this->processNodeDirectly($placeholderCall))->toBe([])
         ->and($this->processNodeDirectly($missingQueryCall))->toBe([]);
+});
+
+it('has a default probability of 80', function (): void {
+    expect(Cwe89Rule::getProbability())->toBe(80);
+});
+
+it('returns the min probability set in the constructor', function (): void {
+    $rule = new Cwe89Rule(50);
+    expect(invade($rule)->getMinProbability())->toBe(50);
 });

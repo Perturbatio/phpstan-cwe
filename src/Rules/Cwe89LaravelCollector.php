@@ -22,6 +22,7 @@ use PhpParser\Node\Scalar\String_;
 use PhpParser\Node\VariadicPlaceholder;
 use PHPStan\Analyser\Scope;
 use PHPStan\Collectors\Collector;
+use PHPStan\ShouldNotHappenException;
 use PHPStan\Type\ObjectType;
 
 /**
@@ -55,22 +56,36 @@ use PHPStan\Type\ObjectType;
  */
 final class Cwe89LaravelCollector implements Collector
 {
-    private const array BUILDER_CLASSES = [
-        'Illuminate\Database\Eloquent\Builder',
-        'Illuminate\Database\Eloquent\Relations\Relation',
-        'Illuminate\Database\Query\Builder',
-    ];
-    private const array RAW_METHODS = [
-        'fromraw',
-        'groupbyraw',
-        'havingraw',
-        'orhavingraw',
-        'orwhereraw',
-        'orderbyraw',
-        'selectraw',
-        'whereraw',
-    ];
-    private const array REQUEST_VARIABLES = ['_GET', '_POST', '_COOKIE', '_REQUEST'];
+    /** @return list<string> */
+    public static function getBuilderClasses(): array
+    {
+        return [
+            'Illuminate\Database\Eloquent\Builder',
+            'Illuminate\Database\Eloquent\Relations\Relation',
+            'Illuminate\Database\Query\Builder',
+        ];
+    }
+
+    /** @return list<string> */
+    public static function getRawMethods(): array
+    {
+        return [
+            'fromraw',
+            'groupbyraw',
+            'havingraw',
+            'orhavingraw',
+            'orwhereraw',
+            'orderbyraw',
+            'selectraw',
+            'whereraw',
+        ];
+    }
+
+    /** @return list<string> */
+    public static function getRequestVariables(): array
+    {
+        return ['_GET', '_POST', '_COOKIE', '_REQUEST'];
+    }
 
     public function getNodeType(): string
     {
@@ -84,7 +99,7 @@ final class Cwe89LaravelCollector implements Collector
             && $node->var instanceof Variable
             && is_string($node->var->name)
         ) {
-            $facts = $this->expressionFacts($node->expr);
+            $facts = $this->expressionFacts($node->expr, $scope);
             if ($node instanceof ConcatAssign) {
                 // The .= operation also reads the old value of the variable
                 $facts = $this->mergeFacts(
@@ -110,7 +125,7 @@ final class Cwe89LaravelCollector implements Collector
         }
 
         // Store the SQL value facts so the rule can check its source
-        $facts = $this->expressionFacts($query);
+        $facts = $this->expressionFacts($query, $scope);
 
         return [
             'kind' => 'sink',
@@ -126,10 +141,10 @@ final class Cwe89LaravelCollector implements Collector
     private function getQueryExpression(Node $node, Scope $scope): ?Expr
     {
         if ($node instanceof MethodCall && $node->name instanceof Identifier
-            && in_array(strtolower($node->name->toString()), self::RAW_METHODS, true)
+            && in_array(strtolower($node->name->toString()), self::getRawMethods(), true)
         ) {
             $receiver = $scope->getType($node->var);
-            foreach (self::BUILDER_CLASSES as $builderClass) {
+            foreach (self::getBuilderClasses() as $builderClass) {
                 if ((new ObjectType($builderClass))->isSuperTypeOf($receiver)->yes()) {
                     return $this->argument($node->args, ['sql', 'expression']);
                 }
@@ -181,8 +196,9 @@ final class Cwe89LaravelCollector implements Collector
 
     /**
      * @return array{dynamic: bool, request: bool, unknown: bool, variables: list<string>}
+     * @throws ShouldNotHappenException
      */
-    private function expressionFacts(Node $node): array
+    private function expressionFacts(Node $node, Scope $scope): array
     {
         if ($node instanceof String_ || $node instanceof LNumber || $node instanceof DNumber
             || $node instanceof EncapsedStringPart
@@ -194,24 +210,41 @@ final class Cwe89LaravelCollector implements Collector
             if (!is_string($node->name)) {
                 return ['dynamic' => true, 'request' => false, 'unknown' => true, 'variables' => []];
             }
-            if (in_array($node->name, self::REQUEST_VARIABLES, true)) {
+            if (in_array($node->name, self::getRequestVariables(), true)) {
                 return ['dynamic' => true, 'request' => true, 'unknown' => false, 'variables' => []];
             }
 
             return ['dynamic' => true, 'request' => false, 'unknown' => false, 'variables' => [$node->name]];
         }
 
+        // Check the receiver type. A method named wrap() on another class
+        // does not prove that the result has SQL identifier protection.
+        if ($node instanceof MethodCall && $node->name instanceof Identifier
+            && strtolower($node->name->toString()) === 'wrap'
+            && (new ObjectType('Illuminate\Database\Grammar'))->isSuperTypeOf($scope->getType($node->var))->yes()
+        ) {
+            $column = $this->argument($node->args, ['value']);
+            // Read the first argument or the named value argument.
+            // Accept only strings: Laravel returns raw expression objects
+            // without identifier quoting.
+            if ($column !== null && $scope->getType($column)->isString()->yes()) {
+                // Do not track the input as unprotected SQL. This result is
+                // protected as an identifier, not as a quoted string value.
+                return $this->emptyFacts();
+            }
+        }
+
         if ($node instanceof Expr\FuncCall && $node->name instanceof Name
             && strtolower($node->name->toString()) === 'request'
         ) {
-            $facts = $this->childrenFacts($node);
+            $facts = $this->childrenFacts($node, $scope);
             $facts['dynamic'] = true;
             $facts['request'] = true;
 
             return $facts;
         }
 
-        $facts = $this->childrenFacts($node);
+        $facts = $this->childrenFacts($node, $scope);
         if ($node instanceof Expr\FuncCall || $node instanceof Expr\MethodCall
             || $node instanceof Expr\StaticCall || $node instanceof Expr\New_
             || $node instanceof Expr\PropertyFetch || $node instanceof Expr\NullsafePropertyFetch
@@ -226,13 +259,15 @@ final class Cwe89LaravelCollector implements Collector
     /**
      * @return array{dynamic: bool, request: bool, unknown: bool, variables: list<string>}
      */
-    private function childrenFacts(Node $node): array
+    private function childrenFacts(Node $node, Scope $scope): array
     {
+        // Keep the scope when checking child expressions. PHPStan uses it
+        // to find the grammar type and the wrap() argument type.
         $facts = $this->emptyFacts();
         foreach ($node->getSubNodeNames() as $name) {
             $child = $node->$name;
             if ($child instanceof Node) {
-                $facts = $this->mergeFacts($facts, $this->expressionFacts($child));
+                $facts = $this->mergeFacts($facts, $this->expressionFacts($child, $scope));
                 continue;
             }
             if (!is_array($child)) {
@@ -240,7 +275,7 @@ final class Cwe89LaravelCollector implements Collector
             }
             foreach ($child as $item) {
                 if ($item instanceof Node) {
-                    $facts = $this->mergeFacts($facts, $this->expressionFacts($item));
+                    $facts = $this->mergeFacts($facts, $this->expressionFacts($item, $scope));
                 }
             }
         }
