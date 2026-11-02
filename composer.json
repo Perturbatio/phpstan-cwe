@@ -20,6 +20,7 @@
         "test": "pest",
         "test:coverage": "pest --coverage",
         "test:coverage:check": "pest --coverage --min=100",
+        "test:mutation:check": "pest --mutate --min=100",
         "analyse": "phpstan analyse"
     },
     "require-dev": {
