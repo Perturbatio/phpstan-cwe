@@ -34,8 +34,9 @@ final class BladeTemplateScanner
             }
 
             $files = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($path, \FilesystemIterator::SKIP_DOTS));
+            /** @var SplFileInfo $file */
             foreach ($files as $file) {
-                if ($file instanceof SplFileInfo && $file->isFile() && str_ends_with($file->getFilename(), '.blade.php')) {
+                if ($file->isFile() && str_ends_with($file->getFilename(), '.blade.php')) {
                     $realPath = $file->getRealPath();
                     if ($realPath === false) {
                         // The path can become invalid between isFile() and getRealPath().
@@ -61,19 +62,7 @@ final class BladeTemplateScanner
             throw new \RuntimeException(sprintf('Cannot read Blade view: %s', $file));
         }
 
-        // Keep newlines so the report points to the line in the view.
-        $hide = static function (array $match): string {
-            if (!isset($match[0]) || !is_string($match[0])) {
-                throw new \RuntimeException('Cannot read matched Blade template text.'); // @codeCoverageIgnore
-            }
-
-            $blank = preg_replace('/[^\r\n]/', ' ', $match[0]);
-            if ($blank === null) {
-                throw new \RuntimeException('Cannot hide a Blade comment or verbatim block.'); // @codeCoverageIgnore
-            }
-
-            return $blank;
-        };
+        $hide = $this->hideMatchedText(...);
         $withoutVerbatim = preg_replace_callback('/@verbatim\b.*?@endverbatim\b/s', $hide, $source);
         if ($withoutVerbatim === null) {
             throw new \RuntimeException(sprintf('Cannot scan Blade view: %s', $file));
@@ -111,15 +100,12 @@ final class BladeTemplateScanner
             }
             $isIgnored = false;
             foreach ($ignores as $end => $line) {
-                if ($end > $offset) {
-                    continue;
-                }
-                $gap = substr($source, $end, $offset - $end);
                 // The comment must be on this line or the line before it.
-                if (preg_match('/\A[ \t]*(?:\r?\n[ \t]*)?\z/', $gap) === 1) {
+                if ($end <= $offset
+                    && preg_match('/\A[ \t]*(?:\r?\n[ \t]*)?\z/', substr($source, $end, $offset - $end)) === 1
+                ) {
                     unset($ignores[$end]);
                     $isIgnored = true;
-                    break;
                 }
             }
             if (!$isIgnored) {
@@ -131,5 +117,17 @@ final class BladeTemplateScanner
         }
 
         return $findings;
+    }
+
+    /** @param array<string> $match */
+    private function hideMatchedText(array $match): string
+    {
+        // Keep newlines so the report points to the line in the view.
+        $blank = preg_replace('/[^\r\n]/', ' ', $match[0]);
+        if ($blank === null) {
+            throw new \RuntimeException('Cannot hide a Blade comment or verbatim block.'); // @codeCoverageIgnore
+        }
+
+        return $blank;
     }
 }

@@ -458,3 +458,137 @@ it('accepts grammar wrapping only for string arguments on a Laravel grammar', fu
     'no argument' => [new ObjectType('Illuminate\Database\Grammar'), new StringType(), 'wrap', null, false, false],
     'wrong named argument' => [new ObjectType('Illuminate\Database\Grammar'), new StringType(), 'wrap', 'other', true, false],
 ]);
+
+it('keeps the complete event shape and source position', function (): void {
+    $function = $this->createStub(PHPStan\Reflection\Php\PhpFunctionFromParserNodeReflection::class);
+    $function->method('getName')->willReturn('findUsers');
+    $class = $this->getContainer()->getByType(PHPStan\Reflection\ReflectionProvider::class)->getClass(stdClass::class);
+    $scope = cwe89LaravelCollectorScope();
+    $scope->method('getFunction')->willReturn($function);
+    $scope->method('getClassReflection')->willReturn($class);
+    $collector = new Cwe89LaravelCollector();
+    $assignment = new Assign(new Variable('query'), new String_('SELECT 1'), ['endTokenPos' => 19]);
+    $sink = new StaticCall(new Name('DB'), new Identifier('SELECT'), [
+        new Arg(new Variable('query'), name: new Identifier('sql')),
+    ], ['startTokenPos' => 31, 'startLine' => 7]);
+
+    expect($collector->processNode($assignment, $scope))->toBe([
+        'kind' => 'assignment',
+        'file' => '/tmp/laravel.php',
+        'scope' => 'stdClass::findUsers',
+        'offset' => 19,
+        'variable' => 'query',
+        'dynamic' => false,
+        'request' => false,
+        'unknown' => false,
+        'variables' => [],
+    ])->and($collector->processNode($sink, $scope))->toBe([
+        'kind' => 'sink',
+        'file' => '/tmp/laravel.php',
+        'scope' => 'stdClass::findUsers',
+        'offset' => 31,
+        'line' => 7,
+        'dynamic' => true,
+        'request' => false,
+        'unknown' => false,
+        'variables' => ['query'],
+    ]);
+});
+
+it('records a file scope and reads the old value for literal concatenation', function (): void {
+    $event = (new Cwe89LaravelCollector())->processNode(
+        new ConcatAssign(new Variable('query'), new String_(' LIMIT 1'), ['endTokenPos' => 25]),
+        cwe89LaravelCollectorScope(),
+    );
+
+    expect($event)->toBe([
+        'kind' => 'assignment',
+        'file' => '/tmp/laravel.php',
+        'scope' => '::file',
+        'offset' => 25,
+        'variable' => 'query',
+        'dynamic' => true,
+        'request' => false,
+        'unknown' => false,
+        'variables' => ['query'],
+    ]);
+});
+
+it('rejects dynamic assignment targets and dynamic call names', function (): void {
+    $collector = new Cwe89LaravelCollector();
+    $scope = cwe89LaravelCollectorScope(receiverType: new ObjectType('Illuminate\\Database\\Query\\Builder'));
+
+    foreach ([
+        new Assign(new Expr\ArrayDimFetch(new Variable('queries'), new String_('query')), new String_('SQL')),
+        new Assign(new Expr\PropertyFetch(new Variable('object'), 'query'), new String_('SQL')),
+        new Assign(new Variable(new Variable('name')), new String_('SQL')),
+        new StaticCall(new Name('DB'), new Variable('method'), [new Arg(new String_('SQL'))]),
+        new StaticCall(new Variable('class'), new Identifier('select'), [new Arg(new String_('SQL'))]),
+        new StaticCall(new Name('DB'), new Identifier('statement'), [new Arg(new String_('SQL'))]),
+        new StaticCall(new Name\FullyQualified('Other\\DB'), new Identifier('select'), [new Arg(new String_('SQL'))]),
+        new MethodCall(new Variable('builder'), new Variable('method'), [new Arg(new String_('SQL'))]),
+        new StaticCall(new Name('DB'), new Identifier('select'), [new PhpParser\Node\VariadicPlaceholder()]),
+    ] as $node) {
+        $nodeScope = $node instanceof StaticCall && $node->class instanceof Name\FullyQualified
+            ? cwe89LaravelCollectorScope('Other\\DB')
+            : $scope;
+        expect($collector->processNode($node, $nodeScope))->toBeNull();
+    }
+});
+
+it('reads all supported named SQL arguments after other arguments', function (bool $isBuilder, string $name): void {
+    $arguments = [
+        new Arg(new Expr\Array_(), name: new Identifier('bindings')),
+        new Arg(new Variable('_GET'), name: new Identifier($name)),
+    ];
+    $call = $isBuilder
+        ? new MethodCall(new Variable('builder'), new Identifier('whereRaw'), $arguments)
+        : new StaticCall(new Name('DB'), new Identifier('select'), $arguments);
+    $event = (new Cwe89LaravelCollector())->processNode(
+        $call,
+        cwe89LaravelCollectorScope(receiverType: new ObjectType('Illuminate\\Database\\Query\\Builder')),
+    );
+
+    expect($event)->toMatchArray(['dynamic' => true, 'request' => true, 'unknown' => false, 'variables' => []]);
+})->with([
+    'builder sql' => [true, 'sql'],
+    'builder expression' => [true, 'expression'],
+    'facade query' => [false, 'query'],
+    'facade sql' => [false, 'sql'],
+]);
+
+it('keeps distinct variable names in first occurrence order', function (): void {
+    $expression = new Expr\BinaryOp\Concat(
+        new Variable('first'),
+        new Expr\BinaryOp\Concat(new Variable('first'), new Variable('second')),
+    );
+    $event = (new Cwe89LaravelCollector())->processNode(new Assign(new Variable('query'), $expression), cwe89LaravelCollectorScope());
+
+    expect($event['variables'])->toBe(['first', 'second']);
+});
+
+it('reads array children and skips empty array items', function (): void {
+    $event = (new Cwe89LaravelCollector())->processNode(
+        new Assign(new Variable('query'), new Expr\Array_([null, new PhpParser\Node\ArrayItem(new Variable('_GET'))])),
+        cwe89LaravelCollectorScope(),
+    );
+    expect($event)->toMatchArray(['dynamic' => true, 'request' => true, 'unknown' => false, 'variables' => []]);
+});
+
+it('does not classify dynamic functions as the request helper', function (): void {
+    $collector = new Cwe89LaravelCollector();
+    foreach ([
+        new FuncCall(new Variable('function'), [new Arg(new Variable('_GET'))]),
+        new MethodCall(new Variable('grammar'), new Variable('method'), [new Arg(new Variable('_GET'))]),
+        new FuncCall(new Name('REQUEST'), [new Arg(new Variable('key'))]),
+    ] as $expression) {
+        $event = $collector->processNode(new Assign(new Variable('query'), $expression), cwe89LaravelCollectorScope());
+        expect($event['dynamic'])->toBeTrue()->and($event['request'])->toBeTrue();
+    }
+
+    $event = $collector->processNode(
+        new Assign(new Variable('query'), new FuncCall(new Variable('function'), [new Arg(new String_('id'))])),
+        cwe89LaravelCollectorScope(),
+    );
+    expect($event['request'])->toBeFalse()->and($event['unknown'])->toBeTrue();
+});

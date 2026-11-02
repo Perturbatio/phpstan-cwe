@@ -54,7 +54,7 @@ final class Cwe89LaravelRule implements Rule
      */
     private function reportsForFile(string $file, array $events): array
     {
-        $events = array_values(array_filter($events, static fn (?array $event): bool => $event !== null));
+        $events = array_filter($events, static fn (?array $event): bool => $event !== null);
         usort($events, static fn (array $left, array $right): int => $left['offset'] <=> $right['offset']);
 
         $variablesByScope = [];
@@ -73,7 +73,7 @@ final class Cwe89LaravelRule implements Rule
                 continue;
             }
 
-            $isKnownRequest = ($status & 2) !== 0;
+            $isKnownRequest = $status === 2;
             $probability = $isKnownRequest ? self::getRequestProbability() : self::getUnknownProbability();
             if (!CweReport::isEnabled($this->minProbability, $probability)) {
                 continue;
@@ -96,20 +96,16 @@ final class Cwe89LaravelRule implements Rule
     }
 
     /**
-     * Status bits: 1 means unknown source, 2 means known request input.
+     * Status: 0 means static, 1 means unknown, 2 means request input.
      *
      * @param LaravelSqlEvent $event
      * @param array<string, int> $variables
      */
     private function resolveStatus(array $event, array $variables): int
     {
-        if (!$event['dynamic']) {
-            return 0;
-        }
-
-        $status = ($event['request'] ? 2 : 0) | ($event['unknown'] ? 1 : 0);
+        $status = $event['request'] ? 2 : ($event['unknown'] ? 1 : 0);
         foreach ($event['variables'] as $variable) {
-            $status |= $variables[$variable] ?? 1;
+            $status = max($status, $variables[$variable] ?? 1);
         }
 
         return $status;

@@ -171,6 +171,7 @@ vendor/bin/pest --testsuite Integration
 GitHub Actions runs tests in parallel. It requires 100% code coverage and a
 100% mutation score. Both checks use PCOV for coverage and disable test
 impact analysis to run the full test suite.
+The mutation check also fails if a test reports a PHP warning.
 
 Run the same checks with:
 

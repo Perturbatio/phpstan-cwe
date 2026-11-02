@@ -78,3 +78,9 @@ it('does not trust a custom function with an HTML escape function name', functio
         ['CWE-79: Request input is sent to HTML without an HTML escape call. Severity: high. Probability: 80%. https://cwe.mitre.org/data/definitions/79.html', 10],
     ]);
 });
+
+it('uses zero as the default minimum and ignores non-output nodes', function (): void {
+    $rule = new Cwe79Rule($this->getContainer()->getByType(ReflectionProvider::class));
+    expect(invade($rule)->minProbability)->toBe(0)
+        ->and($rule->processNode(new PhpParser\Node\Stmt\Return_(new PhpParser\Node\Expr\Variable('_GET')), $this->createStub(PHPStan\Analyser\Scope::class)))->toBe([]);
+});

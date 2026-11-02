@@ -19,14 +19,14 @@ final class RequestInput
     public static function inHtml(Node $node, Scope $scope, ReflectionProvider $reflectionProvider): bool
     {
         return self::contains($node, static function (FuncCall $call) use ($scope, $reflectionProvider): bool {
-            return $call->name instanceof Name
-                && count($call->args) === 1
-                && ($call->name instanceof FullyQualified || $scope->getNamespace() === null)
-                && in_array(
-                    strtolower($reflectionProvider->resolveFunctionName($call->name, $scope) ?? ''),
-                    ['htmlspecialchars', 'htmlentities'],
-                    true,
-                );
+            if (!$call->name instanceof Name || count($call->args) !== 1
+                || (!$call->name instanceof FullyQualified && $scope->getNamespace() !== null)
+            ) {
+                return false;
+            }
+            $function = $reflectionProvider->resolveFunctionName($call->name, $scope);
+
+            return $function !== null && in_array(strtolower($function), ['htmlspecialchars', 'htmlentities'], true);
         });
     }
 

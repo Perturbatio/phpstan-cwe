@@ -15,11 +15,18 @@ Run the full mutation suite. Do not use a test filter. Mutation testing needs
 the complete coverage run.
 
 ```sh
-./vendor/bin/pest --no-tia --mutate --parallel --processes=8
+composer test:mutation:check -- --no-tia --parallel --no-cache
 ```
 
 Agents must use `--no-tia` for Pest runs. The mutation command still runs the
 full suite.
+
+Do not pass `--processes` to mutation runs. Pest 5.3.5 passes this option to
+the test subprocess without `--parallel`. The subprocess stops with an
+unknown-option error. Pest then counts that error as a detected mutation.
+Use `--no-cache` to check each mutation again.
+The Composer command fails on PHP warnings. A warning from changed code
+must not count as a passing test.
 
 ## Read the result
 

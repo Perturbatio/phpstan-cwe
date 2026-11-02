@@ -15,10 +15,6 @@ use PhpParser\Node\Expr\StaticCall;
 use PhpParser\Node\Expr\Variable;
 use PhpParser\Node\Identifier;
 use PhpParser\Node\Name;
-use PhpParser\Node\Scalar\DNumber;
-use PhpParser\Node\Scalar\EncapsedStringPart;
-use PhpParser\Node\Scalar\LNumber;
-use PhpParser\Node\Scalar\String_;
 use PhpParser\Node\VariadicPlaceholder;
 use PHPStan\Analyser\Scope;
 use PHPStan\Collectors\Collector;
@@ -200,12 +196,6 @@ final class Cwe89LaravelCollector implements Collector
      */
     private function expressionFacts(Node $node, Scope $scope): array
     {
-        if ($node instanceof String_ || $node instanceof LNumber || $node instanceof DNumber
-            || $node instanceof EncapsedStringPart
-        ) {
-            return $this->emptyFacts();
-        }
-
         if ($node instanceof Variable) {
             if (!is_string($node->name)) {
                 return ['dynamic' => true, 'request' => false, 'unknown' => true, 'variables' => []];

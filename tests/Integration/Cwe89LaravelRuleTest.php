@@ -28,6 +28,10 @@ class Cwe89LaravelRuleTestCase extends RuleTestCase
         $this->minimumProbability = $minimumProbability;
         $collectedData = [];
         foreach ($events as $event) {
+            if ($event === null) {
+                $collectedData[__DIR__ . '/../fixtures/CWE-89/laravel.php'][Cwe89LaravelCollector::class][] = null;
+                continue;
+            }
             $collectedData[$event['file']][Cwe89LaravelCollector::class][] = $event;
         }
         $node = new CollectedDataNode($collectedData, false);
@@ -176,4 +180,77 @@ it('returns the correct node type for the rule', function (): void {
 it('uses the expected default probabilities', function (): void {
     expect(Cwe89LaravelRule::getRequestProbability())->toBe(80)
         ->and(Cwe89LaravelRule::getUnknownProbability())->toBe(45);
+});
+
+function laravelSqlSink(array $changes = []): array
+{
+    return array_replace([
+        'kind' => 'sink',
+        'file' => __DIR__ . '/../fixtures/CWE-89/laravel.php',
+        'scope' => 'Example::query',
+        'offset' => 20,
+        'line' => 4,
+        'dynamic' => true,
+        'request' => false,
+        'unknown' => false,
+        'variables' => [],
+    ], $changes);
+}
+
+it('uses zero as the default minimum probability', function (): void {
+    expect(invade(new Cwe89LaravelRule())->minProbability)->toBe(0);
+});
+
+it('sorts events and isolates assignments by file and callable', function (): void {
+    $assignment = laravelSqlSink([
+        'kind' => 'assignment',
+        'offset' => 10,
+        'variable' => 'query',
+        'request' => true,
+    ]);
+    unset($assignment['line']);
+    $events = [
+        laravelSqlSink(['variables' => ['query']]),
+        null,
+        $assignment,
+        laravelSqlSink(['scope' => 'Other::query', 'variables' => ['query'], 'line' => 5]),
+        laravelSqlSink(['file' => __DIR__ . '/../fixtures/CWE-89/cwe89.php', 'variables' => ['query'], 'line' => 6]),
+    ];
+    $errors = $this->processFindingsAtMinimumProbability(0, $events);
+
+    expect($errors)->toHaveCount(3)
+        ->and($errors[0]->getMetadata())->toBe([
+            'cwe' => 89, 'severity' => 'high', 'probability' => 80, 'url' => 'https://cwe.mitre.org/data/definitions/89.html',
+        ])
+        ->and($errors[0]->getLine())->toBe(4)
+        ->and($errors[0]->getFile())->toBe(__DIR__ . '/../fixtures/CWE-89/laravel.php')
+        ->and($errors[1]->getMetadata()['probability'])->toBe(45)
+        ->and($errors[2]->getMetadata()['probability'])->toBe(45)
+        ->and($errors[2]->getFile())->toBe(__DIR__ . '/../fixtures/CWE-89/cwe89.php');
+});
+
+it('continues after static and filtered sinks', function (): void {
+    $events = [
+        laravelSqlSink(['offset' => 10, 'dynamic' => false]),
+        laravelSqlSink(['offset' => 20, 'unknown' => true]),
+        laravelSqlSink(['offset' => 30, 'request' => true, 'line' => 8]),
+    ];
+    $errors = $this->processFindingsAtMinimumProbability(80, $events);
+    expect($errors)->toHaveCount(1)->and($errors[0]->getLine())->toBe(8);
+});
+
+it('keeps known request input distinct from unknown and static values', function (): void {
+    $assignment = laravelSqlSink(['kind' => 'assignment', 'variable' => 'safe', 'dynamic' => false, 'offset' => 1]);
+    unset($assignment['line']);
+    $events = [
+        $assignment,
+        laravelSqlSink(['offset' => 10, 'variables' => ['safe'], 'line' => 1]),
+        laravelSqlSink(['offset' => 20, 'unknown' => true, 'line' => 2]),
+        laravelSqlSink(['offset' => 30, 'request' => true, 'unknown' => true, 'line' => 3]),
+        laravelSqlSink(['offset' => 40, 'request' => true, 'variables' => ['unknown'], 'line' => 4]),
+    ];
+    $errors = $this->processFindingsAtMinimumProbability(0, $events);
+    expect($errors)->toHaveCount(3)
+        ->and(array_map(static fn ($error): int => $error->getMetadata()['probability'], $errors))->toBe([45, 80, 80])
+        ->and(array_map(static fn ($error): int => $error->getLine(), $errors))->toBe([2, 3, 4]);
 });

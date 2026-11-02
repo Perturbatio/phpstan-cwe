@@ -109,3 +109,71 @@ it('reports PCRE failures when scanning Blade templates', function (string $sour
     'Blade comment pattern' => [str_repeat('{{--x', 500) . '--}}', 'Cannot scan Blade comments in view:'],
     'raw echo pattern' => [str_repeat('{!!x', 500) . '!!}', 'Cannot scan raw echoes in Blade view:'],
 ]);
+
+it('handles raw echoes and ignore comments at text boundaries', function (string $source, array $expected): void {
+    $directory = sys_get_temp_dir() . '/phpstan-cwe-' . bin2hex(random_bytes(8));
+    mkdir($directory);
+    $file = $directory . '/boundary.blade.php';
+    file_put_contents($file, $source);
+    try {
+        $findings = (new BladeTemplateScanner())->scan([$directory]);
+        expect($findings)->toBe(array_map(
+            static fn (array $finding): array => ['file' => $file, ...$finding],
+            $expected,
+        ));
+    } finally {
+        unlink($file);
+        rmdir($directory);
+    }
+})->with([
+    'raw echo before trailing at sign' => ['{!! $value !!}@', [['line' => 1, 'type' => 'rawEcho']]],
+    'escaped raw echo at start' => ['@{!! $value !!}', []],
+    'ignore before trailing at sign' => ['{{-- @phpstan-ignore phpstanCwe.cwe79 --}}{!! $value !!}@', []],
+    'ignore after one character' => ['x{{-- @phpstan-ignore phpstanCwe.cwe79 --}}{!! $value !!}', []],
+    'first character newline' => ["\n{!! \$value !!}", [['line' => 2, 'type' => 'rawEcho']]],
+    'ignore after newline' => ["\n{{-- @phpstan-ignore phpstanCwe.cwe79 --}}", [['line' => 2, 'type' => 'unmatchedIgnore']]],
+    'ignore after raw echo' => ['{!! $value !!}{{-- @phpstan-ignore phpstanCwe.cwe79 --}}', [['line' => 1, 'type' => 'rawEcho'], ['line' => 1, 'type' => 'unmatchedIgnore']]],
+]);
+
+it('continues after missing default directories and duplicate views', function (): void {
+    $directory = sys_get_temp_dir() . '/phpstan-cwe-' . bin2hex(random_bytes(8));
+    mkdir($directory);
+    $first = $directory . '/first';
+    $second = $directory . '/second';
+    mkdir($first);
+    mkdir($second);
+    $firstFile = $first . '/first.blade.php';
+    $secondFile = $second . '/second.blade.php';
+    file_put_contents($firstFile, '{!! $first !!}');
+    file_put_contents($secondFile, '{!! $second !!}');
+    mkdir($first . '/not-a-file.blade.php');
+    try {
+        $iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($directory, FilesystemIterator::SKIP_DOTS));
+        $iterator->rewind();
+        $firstVisitedDirectory = $iterator->current()->getPath();
+        $findings = (new BladeTemplateScanner())->scan(['resources/views', $firstVisitedDirectory, $directory]);
+        expect($findings)->toHaveCount(2)
+            ->and($findings)->toContain(['file' => $firstFile, 'line' => 1, 'type' => 'rawEcho'])
+            ->and($findings)->toContain(['file' => $secondFile, 'line' => 1, 'type' => 'rawEcho']);
+    } finally {
+        unlink($firstFile);
+        unlink($secondFile);
+        rmdir($first . '/not-a-file.blade.php');
+        rmdir($first);
+        rmdir($second);
+        rmdir($directory);
+    }
+});
+
+it('does not scan raw echo text in other file types', function (): void {
+    $directory = sys_get_temp_dir() . '/phpstan-cwe-' . bin2hex(random_bytes(8));
+    mkdir($directory);
+    $file = $directory . '/view.txt';
+    file_put_contents($file, '{!! $value !!}');
+    try {
+        expect((new BladeTemplateScanner())->scan([$directory]))->toBe([]);
+    } finally {
+        unlink($file);
+        rmdir($directory);
+    }
+});
