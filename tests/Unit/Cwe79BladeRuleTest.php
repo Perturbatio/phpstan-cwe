@@ -32,9 +32,13 @@ it('reports raw echoes and unmatched ignore comments from analysed files', funct
         static fn (IdentifierRuleError $error): ?string => $error->getIdentifier(),
         $errors,
     );
+    $errorCounts = array_count_values($identifiers);
 
     expect($rule->getNodeType())->toBe(CollectedDataNode::class)
         ->and($identifiers)->toContain('phpstanCwe.cwe79', 'phpstanCwe.ignoreUnmatched')
+        ->and($errorCounts['phpstanCwe.cwe79'])->toBe(14)
+        ->and($errorCounts['phpstanCwe.ignoreUnmatched'])->toBe(4)
+        ->and(invade($rule)->minProbability)->toBe(0)
         ->and(Cwe79BladeRule::getProbability())->toBe(80)
         ->and(Cwe79BladeRule::getIgnoreTip())->toBe(
             'Only if you are sure that this value is safe HTML, put {{-- @phpstan-ignore phpstanCwe.cwe79 (Reason) --}} immediately BEFORE this raw echo. Replace "Reason" with the reason.',

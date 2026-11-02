@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Perturbatio\PhpstanCwe\Rules\Cwe79Rule;
 use Perturbatio\PhpstanCwe\RequestInput;
 use PhpParser\Node;
+use PhpParser\Node\Expr\Variable;
 use PHPStan\Reflection\ReflectionProvider;
 use PHPStan\Rules\Rule;
 use PHPStan\Testing\RuleTestCase;
@@ -71,6 +72,16 @@ it('filters reports below the configured probability minimum', function (): void
 
 it('uses a default probability of 80', function (): void {
     expect(Cwe79Rule::getProbability())->toBe(80);
+});
+
+it('uses zero as the default minimum probability', function (): void {
+    $rule = new Cwe79Rule($this->getContainer()->getByType(ReflectionProvider::class));
+
+    expect(invade($rule)->minProbability)->toBe(0);
+});
+
+it('ignores nodes that do not write output', function (): void {
+    expect($this->processNodeDirectly(new PhpParser\Node\Stmt\Return_(new Variable('_GET'))))->toBe([]);
 });
 
 it('does not trust a custom function with an HTML escape function name', function (): void {

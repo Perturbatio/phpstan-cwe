@@ -19,6 +19,8 @@ use PhpParser\Node\Scalar\EncapsedStringPart;
 use PhpParser\Node\Scalar\LNumber;
 use PhpParser\Node\Scalar\String_;
 use PHPStan\Analyser\Scope;
+use PHPStan\Reflection\Php\PhpFunctionFromParserNodeReflection;
+use PHPStan\Reflection\ReflectionProvider;
 use PHPStan\Rules\Rule;
 use PHPStan\Testing\RuleTestCase;
 use PHPStan\Type\MixedType;
@@ -113,6 +115,52 @@ it('collects assignments and tracks dynamic concatenation values', function (): 
         'request' => false,
         'unknown' => true,
         'variables' => ['query'],
+    ]);
+});
+
+it('records the source file, callable scope, and token offset', function (): void {
+    $scope = $this->createStub(Scope::class);
+    $scope->method('getFile')->willReturn('/tmp/laravel.php');
+
+    $function = $this->createStub(PhpFunctionFromParserNodeReflection::class);
+    $function->method('getName')->willReturn('save');
+    $class = $this->getContainer()->getByType(ReflectionProvider::class)->getClass(stdClass::class);
+
+    $scope->method('getFunction')->willReturn($function);
+    $scope->method('getClassReflection')->willReturn($class);
+
+    $event = (new Cwe89LaravelCollector())->processNode(
+        new StaticCall(
+            new Name('DB'),
+            new Identifier('select'),
+            [new Arg(new String_('SELECT 1'))],
+            ['startTokenPos' => 12],
+        ),
+        $scope,
+    );
+
+    expect($event)->toMatchArray([
+        'file' => '/tmp/laravel.php',
+        'scope' => 'stdClass::save',
+        'offset' => 12,
+    ]);
+});
+
+it('uses the file scope when no function or class is available', function (): void {
+    $event = (new Cwe89LaravelCollector())->processNode(
+        new StaticCall(
+            new Name('DB'),
+            new Identifier('select'),
+            [new Arg(new String_('SELECT 1'))],
+            ['startTokenPos' => 12],
+        ),
+        cwe89LaravelCollectorScope(),
+    );
+
+    expect($event)->toMatchArray([
+        'file' => '/tmp/laravel.php',
+        'scope' => '::file',
+        'offset' => 12,
     ]);
 });
 
