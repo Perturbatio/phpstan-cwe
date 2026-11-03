@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Perturbatio\PhpstanCwe\Rules\Cwe89\Cwe89Rule;
 use Perturbatio\PhpstanCwe\RequestInput;
 use PhpParser\Node;
+use PHPStan\Reflection\ReflectionProvider;
 use PHPStan\Rules\Rule;
 use PHPStan\Testing\RuleTestCase;
 
@@ -14,7 +15,12 @@ class Cwe89RuleTestCase extends RuleTestCase
 
     protected function getRule(): Rule
     {
-        return new Cwe89Rule($this->minimumProbability);
+        return $this->makeRule($this->minimumProbability);
+    }
+
+    public function makeRule(int $minimumProbability = 0): Cwe89Rule
+    {
+        return new Cwe89Rule($this->getContainer()->getByType(ReflectionProvider::class), $minimumProbability);
     }
 
     public function checkFixture(array $expectedErrors): void
@@ -52,8 +58,8 @@ it('reports direct SQL input but not bound or numeric input', function (): void 
 });
 
 it('rejects a probability minimum outside the valid range', function (): void {
-    expect(fn () => new Cwe89Rule(101))->toThrow(InvalidArgumentException::class)
-        ->and(fn () => new Cwe89Rule(-1))->toThrow(InvalidArgumentException::class);
+    expect(fn () => $this->makeRule(101))->toThrow(InvalidArgumentException::class)
+        ->and(fn () => $this->makeRule(-1))->toThrow(InvalidArgumentException::class);
 });
 
 it('filters reports below the configured probability minimum', function (): void {
@@ -79,12 +85,12 @@ it('has a default probability of 80', function (): void {
 });
 
 it('returns the min probability set in the constructor', function (): void {
-    $rule = new Cwe89Rule(50);
+    $rule = $this->makeRule(50);
     expect(invade($rule)->getMinProbability())->toBe(50);
 });
 
 it('uses zero as the default minimum probability', function (): void {
-    expect(invade(new Cwe89Rule())->getMinProbability())->toBe(0);
+    expect(invade($this->makeRule())->getMinProbability())->toBe(0);
 });
 
 it('reports each SQL sink with request input', function (string $kind, string $method, string $argumentName): void {
@@ -99,7 +105,7 @@ it('reports each SQL sink with request input', function (string $kind, string $m
         $node = new PhpParser\Node\Expr\MethodCall(new PhpParser\Node\Expr\Variable('connection'), strtoupper($method), $arguments);
         $scope->method('getType')->willReturn(new PHPStan\Type\ObjectType($kind));
     }
-    $errors = (new Cwe89Rule(80))->processNode($node, $scope);
+    $errors = $this->makeRule(80)->processNode($node, $scope);
 
     expect($errors)->toHaveCount(1)
         ->and($errors[0]->getIdentifier())->toBe('phpstanCwe.cwe89')
@@ -129,6 +135,6 @@ it('ignores calls that are not supported SQL sinks', function (): void {
         new PhpParser\Node\Expr\MethodCall(new PhpParser\Node\Expr\Variable('object'), 'query', [$input]),
         new PhpParser\Node\Expr\MethodCall(new PhpParser\Node\Expr\Variable('object'), new PhpParser\Node\Expr\Variable('method'), [$input]),
     ] as $node) {
-        expect((new Cwe89Rule())->processNode($node, $scope))->toBe([]);
+        expect($this->makeRule()->processNode($node, $scope))->toBe([]);
     }
 });

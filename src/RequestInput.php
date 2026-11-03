@@ -18,6 +18,8 @@ final class RequestInput
 {
     public static function inHtml(Node $node, Scope $scope, ReflectionProvider $reflectionProvider): bool
     {
+        $laravelRequestInput = new LaravelRequestInput($reflectionProvider);
+
         return self::contains($node, static function (FuncCall $call) use ($scope, $reflectionProvider): bool {
             if (!$call->name instanceof Name || count($call->args) !== 1
                 || (!$call->name instanceof FullyQualified && $scope->getNamespace() !== null)
@@ -27,17 +29,32 @@ final class RequestInput
             $function = $reflectionProvider->resolveFunctionName($call->name, $scope);
 
             return $function !== null && in_array(strtolower($function), ['htmlspecialchars', 'htmlentities'], true);
-        });
+        }, static fn (Node $source): bool => $laravelRequestInput->isInput($source, $scope));
     }
 
-    public static function inSql(Node $node): bool
-    {
-        return self::contains($node, null);
+    public static function inSql(
+        Node $node,
+        ?Scope $scope = null,
+        ?ReflectionProvider $reflectionProvider = null,
+    ): bool {
+        if ($scope === null || $reflectionProvider === null) {
+            return self::contains($node, null);
+        }
+
+        $laravelRequestInput = new LaravelRequestInput($reflectionProvider);
+
+        return self::contains($node, null, static fn (Node $source): bool => $laravelRequestInput->isInput($source, $scope));
     }
 
-    /** @param (callable(FuncCall): bool)|null $isSafeHtmlEscape */
-    private static function contains(Node $node, ?callable $isSafeHtmlEscape): bool
-    {
+    /**
+     * @param (callable(FuncCall): bool)|null $isSafeHtmlEscape
+     * @param (callable(Node): bool)|null $isAdditionalRequestInput
+     */
+    private static function contains(
+        Node $node,
+        ?callable $isSafeHtmlEscape,
+        ?callable $isAdditionalRequestInput = null,
+    ): bool {
         if ($node instanceof Variable && in_array($node->name, ['_GET', '_POST', '_COOKIE', '_REQUEST'], true)) {
             return true;
         }
@@ -52,14 +69,18 @@ final class RequestInput
             return false;
         }
 
+        if ($isAdditionalRequestInput !== null && $isAdditionalRequestInput($node)) {
+            return true;
+        }
+
         foreach ($node->getSubNodeNames() as $name) {
             $child = $node->$name;
-            if ($child instanceof Node && self::contains($child, $isSafeHtmlEscape)) {
+            if ($child instanceof Node && self::contains($child, $isSafeHtmlEscape, $isAdditionalRequestInput)) {
                 return true;
             }
             if (is_array($child)) {
                 foreach ($child as $item) {
-                    if ($item instanceof Node && self::contains($item, $isSafeHtmlEscape)) {
+                    if ($item instanceof Node && self::contains($item, $isSafeHtmlEscape, $isAdditionalRequestInput)) {
                         return true;
                     }
                 }

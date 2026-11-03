@@ -1,0 +1,9 @@
+includes:
+    - cwe78.neon
+
+services:
+    -
+        class: Perturbatio\PhpstanCwe\LaravelRequestInput
+    phpstanCwe.cwe78Collector:
+        arguments:
+            laravelRequestInput: @Perturbatio\PhpstanCwe\LaravelRequestInput

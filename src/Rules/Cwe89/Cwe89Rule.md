@@ -20,7 +20,13 @@ $statement->execute([$_GET['name']]);
 ```
 
 The rule checks direct input from `$_GET`, `$_POST`, `$_COOKIE`, and
-`$_REQUEST`. It checks PDO `query()`, `exec()`, and `prepare()`. It checks
+`$_REQUEST`. It also uses the [shared Laravel input detector](../../LaravelRequestInput.md)
+for the global `request()` helper and supported input reads on typed
+Laravel request objects and their subclasses. Helper aliases, property
+reads, array reads, and nullsafe input reads are supported.
+HTML and shell escaping do not protect SQL.
+
+It checks PDO `query()`, `exec()`, and `prepare()`. It checks
 mysqli `query()`, `real_query()`, `multi_query()`, and `prepare()`, and the
 equivalent `mysqli_*` functions. It needs a known PDO or mysqli receiver for
 method calls. It does not follow a value after assignment to a variable or

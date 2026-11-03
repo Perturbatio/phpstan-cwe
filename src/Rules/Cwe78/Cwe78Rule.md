@@ -56,6 +56,8 @@ $process = proc_open(
 ```
 
 The rule checks values from `$_GET`, `$_POST`, `$_COOKIE`, and `$_REQUEST`.
+The [Laravel variant](../../LaravelRequestInput.md) also checks the `request()`
+helper and input reads from Laravel request objects.
 It follows simple local assignments in one function or method, as the
 CWE-89 rule does. It reports every supported command sink. It does not
 treat a value as safe only because it has a string type.

@@ -129,7 +129,7 @@ it('recognizes the Laravel DB global alias without a use statement', function ()
         new Identifier('select'),
         [new Arg(new String_('SELECT * FROM users'))],
     );
-    $event = (new Cwe89LaravelCollector())->processNode($call, $scope);
+    $event = (new Cwe89LaravelCollector($this->getContainer()->getByType(PHPStan\Reflection\ReflectionProvider::class)))->processNode($call, $scope);
 
     expect($event)->toBeArray()
         ->and($event['kind'])->toBe('sink')
@@ -140,7 +140,7 @@ it('checks each supported database facade query method', function (): void {
     $scope = $this->createStub(Scope::class);
     $scope->method('resolveName')->willReturn('Illuminate\\Support\\Facades\\DB');
     $scope->method('getFile')->willReturn('/tmp/laravel.php');
-    $collector = new Cwe89LaravelCollector();
+    $collector = new Cwe89LaravelCollector($this->getContainer()->getByType(PHPStan\Reflection\ReflectionProvider::class));
 
     foreach (['select', 'insert', 'update', 'delete'] as $method) {
         $event = $collector->processNode(

@@ -1,5 +1,5 @@
 services:
-    -
+    phpstanCwe.cwe78Collector:
         class: Perturbatio\PhpstanCwe\Rules\Cwe78\Cwe78Collector
         tags:
             - phpstan.collector

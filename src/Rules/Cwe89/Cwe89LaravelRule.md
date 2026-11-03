@@ -59,6 +59,14 @@ When it cannot find the source of a dynamic value, it reports a warning with
 a **45%** probability score. Both scores are estimates. A minimum
 probability setting can hide the lower-confidence warnings.
 
+Request detection uses the [shared Laravel input detector](../../LaravelRequestInput.md).
+It checks the global `request()` helper, including imported aliases, and
+supported input reads on typed `Illuminate\Http\Request` objects and
+subclasses. This includes property, array, and nullsafe reads.
+A different namespaced `request()` function is an unknown source, not a
+known Laravel request source. Validation, HTML escaping, and shell
+escaping do not protect SQL values. Use bound parameters.
+
 The rule does not trace values across function calls or between functions.
 It does not merge assignments from different branches or loops. Check
 reports with conditional assignments with care. It does not check Laravel's

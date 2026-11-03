@@ -1,0 +1,6 @@
+includes:
+    - ../../../cwe78-laravel.neon
+
+parameters:
+    phpstanCwe:
+        minProbability: 80

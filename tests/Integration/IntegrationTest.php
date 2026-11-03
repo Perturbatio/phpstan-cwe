@@ -97,6 +97,20 @@ it('loads a single rule when selected', function (): void {
     expect(array_column($messages, 'identifier'))->toBe(['phpstanCwe.cwe89']);
 });
 
+it('checks Laravel request input at HTML output with both package configurations', function (string $config): void {
+    $result = analyseWithConfig($config, 'tests/fixtures/CWE-79/laravel.php');
+    $messages = array_values($result['files'])[0]['messages'];
+    $expectedLines = [52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 67, 68, 74, 85];
+    $expectedMessage = 'CWE-79: Request input is sent to HTML without an HTML escape call. Severity: high. Probability: 80%. https://cwe.mitre.org/data/definitions/79.html';
+
+    expect($result['totals']['file_errors'])->toBe(count($expectedLines))
+        ->and(array_keys($result['files']))->toBe([dirname(__DIR__, 2) . '/tests/fixtures/CWE-79/laravel.php'])
+        ->and(array_column($messages, 'line'))->toBe($expectedLines)
+        ->and(array_column($messages, 'identifier'))->toBe(array_fill(0, count($expectedLines), 'phpstanCwe.cwe79'))
+        ->and(array_column($messages, 'message'))->toBe(array_fill(0, count($expectedLines), $expectedMessage))
+        ->and(array_column($messages, 'ignorable'))->toBe(array_fill(0, count($expectedLines), true));
+})->with(['cwe79.neon', 'extension.neon']);
+
 it('reports command sinks with context-based ratings and source lines', function (): void {
     $result = analyseWithConfig('cwe78.neon', 'tests/fixtures/CWE-78/cwe78.php');
     $messages = array_values($result['files'])[0]['messages'];
@@ -131,6 +145,65 @@ it('filters CWE-78 findings below the configured probability', function (): void
         ->and(array_column($messages, 'identifier'))->toBe(['phpstanCwe.cwe78', 'phpstanCwe.cwe78'])
         ->and(array_column($messages, 'line'))->toBe([5, 20])
         ->and(array_column($messages, 'message'))->each->toContain('Probability: 95%.');
+});
+
+it('loads Laravel request command checks without duplicate reports', function (string $config): void {
+    $result = analyseWithConfig($config, 'tests/fixtures/CWE-78/laravel.php');
+    $messages = array_values($result['files'])[0]['messages'];
+    $expectedRatings = [
+        52 => ['very high', 95],
+        53 => ['high', 80],
+        54 => ['very high', 95],
+        55 => ['very high', 95],
+        56 => ['very high', 95],
+        57 => ['very high', 95],
+        58 => ['very high', 95],
+        60 => ['medium', 60],
+        61 => ['low', 50],
+        62 => ['low', 50],
+        63 => ['low', 50],
+        64 => ['very high', 95],
+        66 => ['low', 50],
+        67 => ['low', 50],
+        68 => ['very high', 95],
+        69 => ['high', 80],
+        76 => ['very high', 95],
+        77 => ['very high', 95],
+        87 => ['low', 50],
+        88 => ['very high', 95],
+    ];
+
+    expect($result['totals']['file_errors'])->toBe(count($expectedRatings))
+        ->and(array_keys($result['files']))->toBe([dirname(__DIR__, 2) . '/tests/fixtures/CWE-78/laravel.php'])
+        ->and(array_column($messages, 'line'))->toBe(array_keys($expectedRatings));
+
+    foreach ($messages as $message) {
+        [$severity, $probability] = $expectedRatings[$message['line']];
+        expect($message['identifier'])->toBe('phpstanCwe.cwe78')
+            ->and($message['ignorable'])->toBeTrue()
+            ->and($message['message'])->toContain(
+                'Severity: ' . $severity . '.',
+                'Probability: ' . $probability . '%.',
+                'https://cwe.mitre.org/data/definitions/78.html',
+            );
+    }
+})->with(['cwe78-laravel.neon', 'extension.neon']);
+
+it('keeps the base command configuration independent of Laravel request sources', function (): void {
+    $result = analyseWithConfig('cwe78.neon', 'tests/fixtures/CWE-78/laravel.php');
+    $messages = array_values($result['files'])[0]['messages'];
+
+    expect($messages)->toHaveCount(20)
+        ->and(array_column($messages, 'message'))->each->toContain('Severity: low.', 'Probability: 50%.');
+});
+
+it('keeps Laravel findings at the minimum score and filters weaker findings', function (): void {
+    $result = analyseWithConfig('tests/fixtures/CWE-78/laravel-filtered.neon', 'tests/fixtures/CWE-78/laravel.php');
+    $messages = array_values($result['files'])[0]['messages'];
+
+    expect(array_column($messages, 'line'))->toBe([52, 53, 54, 55, 56, 57, 58, 64, 68, 69, 76, 77, 88])
+        ->and($messages[1]['message'])->toContain('Probability: 80%.')
+        ->and($messages[0]['message'])->toContain('Probability: 95%.');
 });
 
 it('requires at least two words in a CWE-78 ignore reason', function (): void {
@@ -176,6 +249,33 @@ it('loads the Laravel SQL rule from its public configuration', function (): void
             ->and($message['tip'])->toBe('If you use wrap() for an SQL identifier, verify that PHPStan knows the argument is a string and the receiver is Illuminate\Database\Grammar or a subclass. Add or correct parameter types where needed. A string type alone does not make raw SQL safe. Use bound parameters for values.');
     }
 });
+
+it('uses shared Laravel sources for raw SQL and direct database queries', function (string $config): void {
+    $result = analyseWithConfig($config, 'tests/fixtures/CWE-89/laravel-input.php');
+    $messages = array_values($result['files'])[0]['messages'];
+    $laravelLines = [48, 49, 50, 51, 52, 53, 54, 55, 56, 58, 60, 82, 83];
+    $databaseLines = [61, 62, 63, 64, 68, 69, 70, 85];
+    $expectedLines = match ($config) {
+        'cwe89-laravel.neon' => $laravelLines,
+        'cwe89.neon' => $databaseLines,
+        default => array_merge($laravelLines, $databaseLines),
+    };
+    sort($expectedLines);
+
+    expect(array_column($messages, 'line'))->toBe($expectedLines)
+        ->and(array_keys($result['files']))->toBe([dirname(__DIR__, 2) . '/tests/fixtures/CWE-89/laravel-input.php']);
+
+    foreach ($messages as $message) {
+        $probability = $message['line'] === 82 ? 45 : 80;
+        expect($message['identifier'])->toBe('phpstanCwe.cwe89')
+            ->and($message['ignorable'])->toBeTrue()
+            ->and($message['message'])->toContain(
+                'Severity: high.',
+                'Probability: ' . $probability . '%.',
+                'https://cwe.mitre.org/data/definitions/89.html',
+            );
+    }
+})->with(['cwe89-laravel.neon', 'cwe89.neon', 'extension.neon']);
 
 it('filters reports below the minimum probability', function (): void {
     $result = analyseWithConfig('tests/fixtures/shared/filtered.neon');

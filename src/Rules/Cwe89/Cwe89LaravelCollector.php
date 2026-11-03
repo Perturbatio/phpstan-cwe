@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Perturbatio\PhpstanCwe\Rules\Cwe89;
 
+use Perturbatio\PhpstanCwe\LaravelRequestInput;
 use PhpParser\Node;
 use PhpParser\Node\Arg;
 use PhpParser\Node\ArgPlaceholder;
@@ -18,6 +19,7 @@ use PhpParser\Node\Name;
 use PhpParser\Node\VariadicPlaceholder;
 use PHPStan\Analyser\Scope;
 use PHPStan\Collectors\Collector;
+use PHPStan\Reflection\ReflectionProvider;
 use PHPStan\ShouldNotHappenException;
 use PHPStan\Type\ObjectType;
 
@@ -52,6 +54,13 @@ use PHPStan\Type\ObjectType;
  */
 final class Cwe89LaravelCollector implements Collector
 {
+    private readonly LaravelRequestInput $laravelRequestInput;
+
+    public function __construct(ReflectionProvider $reflectionProvider)
+    {
+        $this->laravelRequestInput = new LaravelRequestInput($reflectionProvider);
+    }
+
     // These classes provide methods that accept raw SQL text.
     /** @return list<string> */
     public static function getBuilderClasses(): array
@@ -227,19 +236,12 @@ final class Cwe89LaravelCollector implements Collector
             }
         }
 
-        if ($node instanceof Expr\FuncCall && $node->name instanceof Name
-            && strtolower($node->name->toString()) === 'request'
-        ) {
-            // Laravel's request() helper returns request data
-            $facts = $this->childrenFacts($node, $scope);
-            $facts['dynamic'] = true;
-            $facts['request'] = true;
-
-            return $facts;
+        if ($this->laravelRequestInput->isInput($node, $scope)) {
+            return ['dynamic' => true, 'request' => true, 'unknown' => false, 'variables' => []];
         }
 
         $facts = $this->childrenFacts($node, $scope);
-        if ($node instanceof Expr\FuncCall || $node instanceof Expr\MethodCall
+        if ($node instanceof Expr\FuncCall || $node instanceof Expr\MethodCall || $node instanceof Expr\NullsafeMethodCall
             || $node instanceof Expr\StaticCall || $node instanceof Expr\New_
             || $node instanceof Expr\PropertyFetch || $node instanceof Expr\NullsafePropertyFetch
         ) {

@@ -4,4 +4,5 @@ includes:
     - rules/cwe79-blade.neon
     - rules/cwe89.neon
     - rules/cwe89-laravel.neon
-    - rules/cwe78.neon
+    # This file also includes the base rules/cwe78.neon file
+    - rules/cwe78-laravel.neon

@@ -16,6 +16,7 @@ use PhpParser\Node\Identifier;
 use PhpParser\Node\Name;
 use PhpParser\Node\VariadicPlaceholder;
 use PHPStan\Analyser\Scope;
+use PHPStan\Reflection\ReflectionProvider;
 use PHPStan\Rules\Rule;
 use PHPStan\Type\ObjectType;
 
@@ -24,8 +25,10 @@ final class Cwe89Rule implements Rule
 {
     private const string SEVERITY = 'high';
 
-    public function __construct(private readonly int $minProbability = 0)
-    {
+    public function __construct(
+        private readonly ReflectionProvider $reflectionProvider,
+        private readonly int $minProbability = 0,
+    ) {
         // Check the minimum score when PHPStan creates this rule
         CweReport::isEnabled($minProbability, self::getProbability());
     }
@@ -49,7 +52,7 @@ final class Cwe89Rule implements Rule
 
         // Check query text before the call. Bound values are not query text
         $query = $this->getQuery($node, $scope);
-        if ($query === null || !RequestInput::inSql($query)) {
+        if ($query === null || !RequestInput::inSql($query, $scope, $this->reflectionProvider)) {
             return [];
         }
 

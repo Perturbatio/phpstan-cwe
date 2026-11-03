@@ -17,9 +17,34 @@ Safe PHP for HTML text and quoted HTML attributes:
 echo '<p>' . htmlspecialchars($_GET['name']) . '</p>';
 ```
 
-The rule checks `$_GET`, `$_POST`, `$_COOKIE`, and `$_REQUEST`. It does not
-follow a value after assignment to a variable. It does not check JavaScript,
-CSS, URLs, templates, or other output functions. It treats a call to
+The rule checks `$_GET`, `$_POST`, `$_COOKIE`, and `$_REQUEST`. It also
+checks the same [Laravel request sources](../../LaravelRequestInput.md#request-sources)
+as the CWE-78 Laravel variant. This includes `request('key')`, input methods
+on `Illuminate\Http\Request` objects and their subclasses, property reads,
+array reads, and nullsafe input reads. PHPStan must know the request type
+and resolve the global helper. A string type or validation result does
+not make HTML output safe.
+
+Unsafe Laravel example:
+
+```php
+echo request('name');
+```
+
+Protected Laravel example:
+
+```php
+echo htmlspecialchars(request('name'));
+```
+
+Laravel input checks are enabled in both `cwe79.neon` and `extension.neon`.
+They use the shared `LaravelRequestInput` class, as the CWE-78 variant does.
+The severity, probability, and `phpstanCwe.cwe79` identifier do not change.
+The Blade rule does not change.
+
+The rule does not follow a value after assignment to a variable. It does
+not check JavaScript, CSS, URLs, templates, or other output functions.
+It treats a call to
 `htmlspecialchars()` or `htmlentities()` with only one argument as safe.
 These functions use quote escape flags by default in PHP 8.1 and later.
 In a namespace, use `\htmlspecialchars()` or `\htmlentities()` to show

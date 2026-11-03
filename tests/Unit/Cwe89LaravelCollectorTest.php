@@ -19,6 +19,7 @@ use PhpParser\Node\Scalar\EncapsedStringPart;
 use PhpParser\Node\Scalar\LNumber;
 use PhpParser\Node\Scalar\String_;
 use PHPStan\Analyser\Scope;
+use PHPStan\Reflection\ReflectionProvider;
 use PHPStan\Rules\Rule;
 use PHPStan\Testing\RuleTestCase;
 use PHPStan\Type\MixedType;
@@ -29,6 +30,16 @@ use PHPStan\Type\UnionType;
 
 class Cwe89LaravelCollectorTestCase extends RuleTestCase
 {
+    protected function collector(): Cwe89LaravelCollector
+    {
+        $provider = $this->createStub(ReflectionProvider::class);
+        $provider->method('resolveFunctionName')->willReturnCallback(
+            static fn (Name $name): string => $name->toString(),
+        );
+
+        return new Cwe89LaravelCollector($provider);
+    }
+
     protected function getRule(): Rule
     {
         return new Cwe89LaravelRule();
@@ -52,7 +63,7 @@ function cwe89LaravelCollectorScope(
 }
 
 it('exposes its node type and ignores nodes that are not SQL sinks', function (): void {
-    $collector = new Cwe89LaravelCollector();
+    $collector = $this->collector();
 
     expect($collector->getNodeType())->toBe(PhpParser\Node::class)
         ->and($collector->processNode(
@@ -84,7 +95,7 @@ it('provides the supported Laravel classes, methods, and request variables', fun
 });
 
 it('collects assignments and tracks dynamic concatenation values', function (): void {
-    $collector = new Cwe89LaravelCollector();
+    $collector = $this->collector();
     $scope = cwe89LaravelCollectorScope();
 
     $requestAssignment = $collector->processNode(
@@ -117,7 +128,7 @@ it('collects assignments and tracks dynamic concatenation values', function (): 
 });
 
 it('recognizes every supported raw builder method', function (): void {
-    $collector = new Cwe89LaravelCollector();
+    $collector = $this->collector();
     $scope = cwe89LaravelCollectorScope(
         receiverType: new ObjectType('Illuminate\\Database\\Query\\Builder'),
     );
@@ -148,7 +159,7 @@ it('recognizes every supported raw builder method', function (): void {
 });
 
 it('recognizes supported builder classes and skips unsupported method calls', function (): void {
-    $collector = new Cwe89LaravelCollector();
+    $collector = $this->collector();
 
     foreach ([
         'Illuminate\\Database\\Query\\Builder',
@@ -198,7 +209,7 @@ it('recognizes supported builder classes and skips unsupported method calls', fu
 });
 
 it('collects database facade queries with positional and named arguments', function (): void {
-    $collector = new Cwe89LaravelCollector();
+    $collector = $this->collector();
 
     foreach (['select', 'insert', 'update', 'delete'] as $method) {
         $event = $collector->processNode(
@@ -235,7 +246,7 @@ it('collects database facade queries with positional and named arguments', funct
 });
 
 it('ignores unsupported SQL arguments and facade calls', function (): void {
-    $collector = new Cwe89LaravelCollector();
+    $collector = $this->collector();
     $builderScope = cwe89LaravelCollectorScope(
         receiverType: new ObjectType('Illuminate\\Database\\Query\\Builder'),
     );
@@ -267,7 +278,7 @@ it('ignores unsupported SQL arguments and facade calls', function (): void {
 });
 
 it('classifies literals, request inputs, variables, and dynamic variable names', function (): void {
-    $collector = new Cwe89LaravelCollector();
+    $collector = $this->collector();
     $scope = cwe89LaravelCollectorScope();
 
     foreach ([
@@ -345,7 +356,7 @@ it('classifies literals, request inputs, variables, and dynamic variable names',
 });
 
 it('tracks request helper calls and marks other dynamic expressions unknown', function (): void {
-    $collector = new Cwe89LaravelCollector();
+    $collector = $this->collector();
     $scope = cwe89LaravelCollectorScope();
 
     $requestEvent = $collector->processNode(
@@ -387,7 +398,7 @@ it('tracks request helper calls and marks other dynamic expressions unknown', fu
 });
 
 it('combines request and variable facts in compound expressions', function (): void {
-    $collector = new Cwe89LaravelCollector();
+    $collector = $this->collector();
     $event = $collector->processNode(
         new StaticCall(
             new Name('DB'),
@@ -428,7 +439,7 @@ it('accepts grammar wrapping only for string arguments on a Laravel grammar', fu
         ? [new Arg($column, name: $argumentName === null ? null : new Identifier($argumentName))]
         : [];
     // Collect an assignment to check the facts stored for later SQL calls.
-    $event = (new Cwe89LaravelCollector())->processNode(
+    $event = ($this->collector())->processNode(
         new Assign(
             new Variable('wrappedColumn'),
             new MethodCall($grammar, new Identifier($method), $arguments),
@@ -466,7 +477,7 @@ it('keeps the complete event shape and source position', function (): void {
     $scope = cwe89LaravelCollectorScope();
     $scope->method('getFunction')->willReturn($function);
     $scope->method('getClassReflection')->willReturn($class);
-    $collector = new Cwe89LaravelCollector();
+    $collector = $this->collector();
     $assignment = new Assign(new Variable('query'), new String_('SELECT 1'), ['endTokenPos' => 19]);
     $sink = new StaticCall(new Name('DB'), new Identifier('SELECT'), [
         new Arg(new Variable('query'), name: new Identifier('sql')),
@@ -496,7 +507,7 @@ it('keeps the complete event shape and source position', function (): void {
 });
 
 it('records a file scope and reads the old value for literal concatenation', function (): void {
-    $event = (new Cwe89LaravelCollector())->processNode(
+    $event = ($this->collector())->processNode(
         new ConcatAssign(new Variable('query'), new String_(' LIMIT 1'), ['endTokenPos' => 25]),
         cwe89LaravelCollectorScope(),
     );
@@ -515,7 +526,7 @@ it('records a file scope and reads the old value for literal concatenation', fun
 });
 
 it('rejects dynamic assignment targets and dynamic call names', function (): void {
-    $collector = new Cwe89LaravelCollector();
+    $collector = $this->collector();
     $scope = cwe89LaravelCollectorScope(receiverType: new ObjectType('Illuminate\\Database\\Query\\Builder'));
 
     foreach ([
@@ -544,7 +555,7 @@ it('reads all supported named SQL arguments after other arguments', function (bo
     $call = $isBuilder
         ? new MethodCall(new Variable('builder'), new Identifier('whereRaw'), $arguments)
         : new StaticCall(new Name('DB'), new Identifier('select'), $arguments);
-    $event = (new Cwe89LaravelCollector())->processNode(
+    $event = ($this->collector())->processNode(
         $call,
         cwe89LaravelCollectorScope(receiverType: new ObjectType('Illuminate\\Database\\Query\\Builder')),
     );
@@ -562,13 +573,13 @@ it('keeps distinct variable names in first occurrence order', function (): void 
         new Variable('first'),
         new Expr\BinaryOp\Concat(new Variable('first'), new Variable('second')),
     );
-    $event = (new Cwe89LaravelCollector())->processNode(new Assign(new Variable('query'), $expression), cwe89LaravelCollectorScope());
+    $event = ($this->collector())->processNode(new Assign(new Variable('query'), $expression), cwe89LaravelCollectorScope());
 
     expect($event['variables'])->toBe(['first', 'second']);
 });
 
 it('reads array children and skips empty array items', function (): void {
-    $event = (new Cwe89LaravelCollector())->processNode(
+    $event = ($this->collector())->processNode(
         new Assign(new Variable('query'), new Expr\Array_([null, new PhpParser\Node\ArrayItem(new Variable('_GET'))])),
         cwe89LaravelCollectorScope(),
     );
@@ -576,7 +587,7 @@ it('reads array children and skips empty array items', function (): void {
 });
 
 it('does not classify dynamic functions as the request helper', function (): void {
-    $collector = new Cwe89LaravelCollector();
+    $collector = $this->collector();
     foreach ([
         new FuncCall(new Variable('function'), [new Arg(new Variable('_GET'))]),
         new MethodCall(new Variable('grammar'), new Variable('method'), [new Arg(new Variable('_GET'))]),

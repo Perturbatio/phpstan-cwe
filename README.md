@@ -6,6 +6,14 @@ This package reports potential web application weaknesses during PHPStan
 analysis. The PHP rules check direct request input at HTML and SQL sinks.
 The CWE-78 rule reports command execution calls for review, follows simple
 local assignments, and ranks direct request input by severity and probability.
+Its Laravel variant also checks the `request()` helper and input reads
+from `Illuminate\Http\Request` objects and their subclasses.
+The CWE-79 HTML rule checks the same Laravel request sources. Both rules
+use one shared source detector, but keep separate escape checks for shell
+arguments and HTML output. Laravel HTML checks are enabled in `cwe79.neon`
+and `extension.neon`.
+Both CWE-89 rules also use this shared detector for Laravel request sources.
+They keep their SQL-specific checks for query text and bound values.
 
 The Laravel SQL rule checks dynamic values in raw Eloquent and Query Builder
 expressions and `DB::select()`. It follows simple local assignments. It also
@@ -36,9 +44,16 @@ includes:
 ```
 
 The default file enables all the rules. To use one rule,
-include the specific rule, e.g. `cwe78.neon`, `cwe79.neon`,
+include the specific rule, e.g. `cwe78.neon`, `cwe78-laravel.neon`, `cwe79.neon`,
 `cwe79-blade.neon`, `cwe89.neon`, or `cwe89-laravel.neon` instead of
 `extension.neon`.
+
+The full extension uses the Laravel CWE-78 variant. Use `cwe78.neon`
+for only the base command checks, or `cwe78-laravel.neon` to add Laravel
+request sources. Do not include both files. Both use `phpstanCwe.cwe78`
+and report each command only once. See the
+[shared Laravel input document](src/LaravelRequestInput.md)
+for supported request methods, ratings, and limits.
 
 If you want to include all rules but ignore a specific rule.
 You cannot exclude a specific rule once loaded, so it will still be processed by PHPStan, but you _can_ ignore the errors it produces.

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Perturbatio\PhpstanCwe\Rules\Cwe78;
 
+use Perturbatio\PhpstanCwe\LaravelRequestInput;
 use PhpParser\Node;
 use PhpParser\Node\Arg;
 use PhpParser\Node\Expr;
@@ -52,8 +53,10 @@ final class Cwe78Collector implements Collector
     // @pest-mutate-ignore
     private const array REQUEST_VARIABLES = ['_GET', '_POST', '_COOKIE', '_REQUEST'];
 
-    public function __construct(private readonly ReflectionProvider $reflectionProvider)
-    {
+    public function __construct(
+        private readonly ReflectionProvider $reflectionProvider,
+        private readonly ?LaravelRequestInput $laravelRequestInput = null,
+    ) {
     }
 
     public function getNodeType(): string
@@ -191,6 +194,10 @@ final class Cwe78Collector implements Collector
             : null;
         if ($function !== null && strtolower($function) === 'escapeshellarg') {
             return ['request' => false, 'hasStaticText' => false, 'variables' => []];
+        }
+
+        if ($this->laravelRequestInput?->isInput($node, $scope) === true) {
+            return ['request' => true, 'hasStaticText' => false, 'variables' => []];
         }
 
         $facts = [

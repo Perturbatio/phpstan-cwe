@@ -1,6 +1,6 @@
 ---
 name: cwe-rules
-description: "Use this skill when you create, change, or review a CWE rule in this package. Trigger when work touches src/Rules, rule NEON files, rule documents, CWE fixtures, or rule tests. Covers file names, report format, configuration, ignore comments, documents, fixtures, and tests."
+description: "Use this skill when you create, change, or review a CWE rule in this package. Trigger when work touches src/Rules, shared input detectors, rule NEON files, rule documents, CWE fixtures, or rule tests. Covers shared input detection, file names, report format, configuration, ignore comments, documents, fixtures, and tests."
 license: MIT
 ---
 
@@ -21,6 +21,37 @@ documents in ASD-STE100 Simplified Technical English.
   Examples: `CweReport`, `RequestInput`, `BladeTemplateScanner`.
 - Before you write new logic, look for a class that you can use again.
 - Use descriptive names for variables and methods.
+
+## Shared input detection
+
+- Every new or changed rule that checks request input must first read
+  `src/LaravelRequestInput.php`, `src/RequestInput.php`, and
+  `src/LaravelRequestInput.md`.
+- Reuse `LaravelRequestInput::isInput()` to identify Laravel sources.
+  Do not copy its method list, helper resolution, or request type checks
+  into a rule or collector. This class detects sources; it is not a
+  PHPStan rule and does not decide whether a value is safe.
+- For direct HTML or SQL expression checks, reuse `RequestInput::inHtml()`
+  or `RequestInput::inSql()`. Pass both `Scope` and `ReflectionProvider`
+  to `inSql()` so it can detect Laravel sources.
+- A collector that needs assignment or source facts can call
+  `LaravelRequestInput::isInput()` during its own expression scan.
+  Keep the facts that its rule needs. Do not add a second recursive scan
+  when the existing scan can use the shared detector.
+- Keep sink selection, escape checks, bindings, assignment tracking, and
+  ratings separate from source detection. Do not use HTML escaping as
+  SQL or shell protection. Do not treat validation or a string type as
+  proof that input is safe.
+- When a new rule needs another Laravel source, extend the shared
+  detector and its tests instead of adding a rule-specific copy. Check
+  the effect on all rules that use it. Keep existing behaviour unless
+  the change is required, and document any change.
+- Add shared detector tests for new sources and negative cases, including
+  unrelated receivers and shadowed helpers. Add rule tests for unsafe
+  input, accepted protections, and relevant edge cases. Check both the
+  single-rule configuration and `extension.neon`.
+- Keep the shared source list and limits in `src/LaravelRequestInput.md`.
+  Link to this document from rule documents instead of copying the list.
 
 ## File names and locations
 
