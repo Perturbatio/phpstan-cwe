@@ -196,7 +196,7 @@ final class Cwe78Collector implements Collector
             return ['request' => false, 'hasStaticText' => false, 'variables' => []];
         }
 
-        if ($this->laravelRequestInput?->isInput($node, $scope) === true) {
+        if ($this->laravelRequestInput?->isInput($node, $scope)) {
             return ['request' => true, 'hasStaticText' => false, 'variables' => []];
         }
 

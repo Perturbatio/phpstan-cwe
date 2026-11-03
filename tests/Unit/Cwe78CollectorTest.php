@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Perturbatio\PhpstanCwe\Rules\Cwe78\Cwe78Collector;
 use Perturbatio\PhpstanCwe\Rules\Cwe78\Cwe78IgnoreCollector;
+use Perturbatio\PhpstanCwe\LaravelRequestInput;
 use PhpParser\Node\Arg;
 use PhpParser\Node\ArgPlaceholder;
 use PhpParser\Comment;
@@ -158,6 +159,24 @@ it('tracks concatenation assignments and command functions', function (): void {
             ),
             $scope,
         )['variables'])->toBe(['command']);
+});
+
+it('collects Laravel request input facts', function (): void {
+    $provider = $this->createStub(ReflectionProvider::class);
+    $provider->method('resolveFunctionName')->willReturnCallback(
+        static fn (Name $name): string => $name->toString(),
+    );
+    $scope = $this->scope();
+    $input = new FuncCall(
+        new Name('request'),
+        [new Arg(new String_('command'))],
+    );
+    $collector = new Cwe78Collector($provider, new LaravelRequestInput($provider));
+
+    expect($collector->processNode(
+        new Assign(new Variable('command'), $input),
+        $scope,
+    ))->toMatchArray(['kind' => 'assignment', 'request' => true]);
 });
 
 it('recognizes escaped values, named commands, process arrays, and backticks', function (): void {

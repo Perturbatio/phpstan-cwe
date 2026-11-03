@@ -90,7 +90,9 @@ it('returns the min probability set in the constructor', function (): void {
 });
 
 it('uses zero as the default minimum probability', function (): void {
-    expect(invade($this->makeRule())->getMinProbability())->toBe(0);
+    $rule = new Cwe89Rule($this->getContainer()->getByType(ReflectionProvider::class));
+
+    expect(invade($rule)->getMinProbability())->toBe(0);
 });
 
 it('reports each SQL sink with request input', function (string $kind, string $method, string $argumentName): void {

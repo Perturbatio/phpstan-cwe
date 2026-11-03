@@ -241,8 +241,7 @@ final class Cwe89LaravelCollector implements Collector
         }
 
         $facts = $this->childrenFacts($node, $scope);
-        if ($node instanceof Expr\FuncCall || $node instanceof Expr\MethodCall || $node instanceof Expr\NullsafeMethodCall
-            || $node instanceof Expr\StaticCall || $node instanceof Expr\New_
+        if ($node instanceof Expr\CallLike
             || $node instanceof Expr\PropertyFetch || $node instanceof Expr\NullsafePropertyFetch
         ) {
             // Mark values from calls as unknown unless a rule above can classify them

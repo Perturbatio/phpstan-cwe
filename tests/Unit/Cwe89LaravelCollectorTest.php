@@ -397,6 +397,19 @@ it('tracks request helper calls and marks other dynamic expressions unknown', fu
     }
 });
 
+it('marks a static call SQL value as unknown', function (): void {
+    $event = $this->collector()->processNode(
+        new StaticCall(
+            new Name('DB'),
+            new Identifier('select'),
+            [new Arg(new StaticCall(new Name('Source'), new Identifier('value')))],
+        ),
+        cwe89LaravelCollectorScope(),
+    );
+
+    expect($event)->toMatchArray(['dynamic' => true, 'unknown' => true]);
+});
+
 it('combines request and variable facts in compound expressions', function (): void {
     $collector = $this->collector();
     $event = $collector->processNode(
