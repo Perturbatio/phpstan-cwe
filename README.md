@@ -146,6 +146,23 @@ Read [CWE-78](src/Rules/Cwe78/Cwe78Rule.md), [CWE-79](src/Rules/Cwe79/Cwe79Rule.
 [CWE-89 in Laravel query builders](src/Rules/Cwe89/Cwe89LaravelRule.md) for
 examples and limitations.
 
+## IDE support
+
+PHPStan stores its classes in a PHAR archive. If your IDE cannot find these
+classes, use [`stubs/phpstan.php`](stubs/phpstan.php). This file declares the
+PHPStan 2.x classes and methods used by this package. It does not contain
+their implementations or the full PHPStan API.
+
+In PhpStorm, keep `stubs/` in the project and do not mark it as excluded.
+For another project, add this directory under **Settings > PHP > Include Path**.
+In other IDEs, add this directory to the PHP language server's include paths.
+Do not index both the stub file and the PHPStan PHAR source. This can cause
+duplicate class warnings.
+
+Do not require this file, add it to Composer autoload settings, or add it to
+PHPStan's `stubFiles`, `scanFiles`, or analysis paths. It is for IDE indexing
+only. Runtime code must use the installed PHPStan classes.
+
 ## Check code style
 
 Laravel Pint uses the PSR-12 preset. Check PHP files with:
