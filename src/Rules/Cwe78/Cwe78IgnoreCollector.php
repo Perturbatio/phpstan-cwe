@@ -27,6 +27,7 @@ final class Cwe78IgnoreCollector implements Collector
     /** @return Cwe78IgnoreEvent|null */
     public function processNode(Node $node, Scope $scope): ?array
     {
+        // Only check comments on statements that can contain an ignore
         if (!$node instanceof Expression) {
             return null;
         }
@@ -37,6 +38,7 @@ final class Cwe78IgnoreCollector implements Collector
             }
 
             $reason = '';
+            // Keep the text inside the ignore brackets for the rule to check
             if (preg_match('/phpstanCwe\.cwe78\s*\(([^)]*)\)/', $comment->getText(), $reasonMatch)) {
                 $reason = trim($reasonMatch[1]);
             }

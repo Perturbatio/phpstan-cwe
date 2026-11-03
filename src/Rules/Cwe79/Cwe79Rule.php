@@ -22,6 +22,7 @@ final class Cwe79Rule implements Rule
         private readonly ReflectionProvider $reflectionProvider,
         private readonly int $minProbability = 0,
     ) {
+        // Check the minimum score when PHPStan creates this rule.
         CweReport::isEnabled($minProbability, self::getProbability());
     }
 
@@ -37,6 +38,7 @@ final class Cwe79Rule implements Rule
 
     public function processNode(Node $node, Scope $scope): array
     {
+        // Do not scan output when this rule is below the configured score
         if (!CweReport::isEnabled($this->minProbability, self::getProbability())) {
             return [];
         }
@@ -49,8 +51,9 @@ final class Cwe79Rule implements Rule
             return [];
         }
 
-        // Check output text here. This rule does not follow assigned values.
+        // Check direct output only. This rule does not follow assigned values
         foreach ($expressions as $expression) {
+            // Report when request input reaches HTML without an escape call
             if (RequestInput::inHtml($expression, $scope, $this->reflectionProvider)) {
                 return [CweReport::make(79, 'Request input is sent to HTML without an HTML escape call.', self::SEVERITY, self::getProbability())];
             }

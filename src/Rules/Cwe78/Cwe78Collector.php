@@ -45,10 +45,10 @@ use PHPStan\Reflection\ReflectionProvider;
  */
 final class Cwe78Collector implements Collector
 {
-    // PHP does not execute this constant declaration at run time. The collector test checks this list through its getter.
+    // These functions run commands and can expose a system to unsafe input
     // @pest-mutate-ignore
     private const array SINKS = ['exec', 'system', 'shell_exec', 'passthru', 'popen', 'proc_open'];
-    // PHP does not execute this constant declaration at run time. The collector test checks this list through its getter.
+    // These PHP arrays can hold input from an HTTP request
     // @pest-mutate-ignore
     private const array REQUEST_VARIABLES = ['_GET', '_POST', '_COOKIE', '_REQUEST'];
 
@@ -76,6 +76,7 @@ final class Cwe78Collector implements Collector
     /** @return Cwe78Event|null */
     public function processNode(Node $node, Scope $scope): ?array
     {
+        // Record assignments so the rule can follow simple local variables
         if ($node instanceof Assign || $node instanceof ConcatAssign) {
             if (!$node->var instanceof Expr\Variable) {
                 return null;
@@ -87,6 +88,7 @@ final class Cwe78Collector implements Collector
 
             $facts = $this->expressionFacts($node->expr, $scope);
             if ($node instanceof ConcatAssign) {
+                // Concatenation also keeps the old value and adds fixed text
                 $facts['request'] = $facts['request'] || in_array($variableName, self::getRequestVariables(), true);
                 $facts['hasStaticText'] = true;
                 if (!in_array($variableName, $facts['variables'], true)) {
@@ -107,6 +109,7 @@ final class Cwe78Collector implements Collector
         if ($node instanceof ShellExec) {
             $facts = $this->expressionFacts($node, $scope);
         } else {
+            // Read only calls that match a supported command function
             $command = $this->getCommand($node, $scope);
             if ($command === null) {
                 return null;
@@ -132,6 +135,7 @@ final class Cwe78Collector implements Collector
 
     private function getCommand(Node $node, Scope $scope): ?Expr
     {
+        // Resolve aliases before comparing the function with the supported list
         if (!$node instanceof FuncCall || !$node->name instanceof Node\Name) {
             return null;
         }
@@ -157,6 +161,7 @@ final class Cwe78Collector implements Collector
 
     private function commandValue(string $function, Expr $value): Expr
     {
+        // proc_open accepts an argument array. Its first item is the executable
         if (strtolower($function) !== 'proc_open') {
             return $value;
         }
@@ -174,6 +179,9 @@ final class Cwe78Collector implements Collector
     }
 
     /**
+     * Find request input, fixed text, and local variables in an expression
+     * This check does not prove that other values are safe
+     *
      * @return array{request: bool, hasStaticText: bool, variables: list<string>}
      */
     private function expressionFacts(Node $node, Scope $scope): array
@@ -199,6 +207,7 @@ final class Cwe78Collector implements Collector
         }
 
         if ($node instanceof Expr\ArrayDimFetch) {
+            // Check both the array and its key for request input
             $arrayFacts = $this->expressionFacts($node->var, $scope);
             $dimFacts = $node->dim === null
                 ? ['request' => false, 'variables' => []]
@@ -234,6 +243,7 @@ final class Cwe78Collector implements Collector
      */
     private function mergeFacts(array $left, array $right): array
     {
+        // Keep one copy of each local variable name
         return [
             'request' => $left['request'] || $right['request'],
             'hasStaticText' => $left['hasStaticText'] || $right['hasStaticText'],
@@ -244,6 +254,7 @@ final class Cwe78Collector implements Collector
     /** @return array{file: string, scope: string, offset: int} */
     private function eventBase(int $offset, Scope $scope): array
     {
+        // Use the function name to keep variable facts separate by scope
         return [
             'file' => $scope->getFile(),
             'scope' => $scope->getFunctionName() ?? 'file',

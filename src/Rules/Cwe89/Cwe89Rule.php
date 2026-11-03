@@ -26,6 +26,7 @@ final class Cwe89Rule implements Rule
 
     public function __construct(private readonly int $minProbability = 0)
     {
+        // Check the minimum score when PHPStan creates this rule
         CweReport::isEnabled($minProbability, self::getProbability());
     }
 
@@ -41,11 +42,12 @@ final class Cwe89Rule implements Rule
 
     public function processNode(Node $node, Scope $scope): array
     {
+        // Do not inspect queries when this rule is below the configured score
         if (!CweReport::isEnabled($this->getMinProbability(), self::getProbability())) {
             return [];
         }
 
-        // Check query text before the call. Bound values are not query text.
+        // Check query text before the call. Bound values are not query text
         $query = $this->getQuery($node, $scope);
         if ($query === null || !RequestInput::inSql($query)) {
             return [];
@@ -56,6 +58,7 @@ final class Cwe89Rule implements Rule
 
     private function getQuery(Node $node, Scope $scope): ?Expr
     {
+        // Check only supported database functions and database objects
         if ($node instanceof FuncCall && $node->name instanceof Name) {
             $function = strtolower($node->name->toString());
             if (in_array($function, ['mysqli_query', 'mysqli_real_query', 'mysqli_multi_query', 'mysqli_prepare'], true)) {
@@ -72,6 +75,7 @@ final class Cwe89Rule implements Rule
         if (in_array($method, ['query', 'exec', 'prepare'], true)
             && (new ObjectType(\PDO::class))->isSuperTypeOf($receiver)->yes()
         ) {
+            // PDO uses a different parameter name for exec()
             return $this->argument($node->args, 0, $method === 'exec' ? 'statement' : 'query');
         }
         if (in_array($method, ['query', 'real_query', 'multi_query', 'prepare'], true)
@@ -86,7 +90,7 @@ final class Cwe89Rule implements Rule
     /** @param array<Arg|ArgPlaceholder|VariadicPlaceholder> $arguments */
     private function argument(array $arguments, int $position, string $name): ?Expr
     {
-        // A named argument can put the query at a new position.
+        // Prefer a named query argument. Otherwise, use its positional index
         $positional = 0;
         foreach ($arguments as $argument) {
             if (!$argument instanceof Arg) {

@@ -26,6 +26,7 @@ final class Cwe89LaravelRule implements Rule
 
     public function __construct(private readonly int $minProbability = 0)
     {
+        // Check the minimum score when PHPStan creates this rule
         CweReport::isEnabled($minProbability, self::getRequestProbability());
     }
 
@@ -47,6 +48,7 @@ final class Cwe89LaravelRule implements Rule
     public function processNode(Node $node, Scope $scope): array
     {
         $reports = [];
+        // Check collected events in each file
         foreach ($node->get(Cwe89LaravelCollector::class) as $file => $events) {
             $reports = array_merge($reports, $this->reportsForFile($file, $events));
         }
@@ -60,9 +62,11 @@ final class Cwe89LaravelRule implements Rule
      */
     private function reportsForFile(string $file, array $events): array
     {
+        // Sort events so each assignment is known before later uses
         $events = array_filter($events, static fn (?array $event): bool => $event !== null);
         usort($events, static fn (array $left, array $right): int => $left['offset'] <=> $right['offset']);
 
+        // Keep variable facts separate for each class and function
         $variablesByScope = [];
         $reports = [];
         foreach ($events as $event) {
@@ -72,6 +76,7 @@ final class Cwe89LaravelRule implements Rule
             $status = $this->resolveStatus($event, $variables);
 
             if ($event['kind'] === 'assignment') {
+                // Save the source status for later query calls
                 $variablesByScope[$scope][$event['variable']] = $status;
                 continue;
             }
@@ -85,6 +90,7 @@ final class Cwe89LaravelRule implements Rule
                 continue;
             }
 
+            // Unknown dynamic values get a lower score than known request data
             $reason = $isKnownRequest
                 ? 'Request input is used in Laravel raw SQL. Use a bound parameter.'
                 : 'Warning: The source of a dynamic value in Laravel raw SQL is unknown. Use a bound parameter.';
@@ -110,6 +116,7 @@ final class Cwe89LaravelRule implements Rule
      */
     private function resolveStatus(array $event, array $variables): int
     {
+        // Keep the strongest known status found in the query expression
         $status = $event['request'] ? self::STATUS_REQUEST : ($event['unknown'] ? self::STATUS_UNKNOWN : self::STATUS_STATIC);
         foreach ($event['variables'] as $variable) {
             $status = max($status, $variables[$variable] ?? self::STATUS_UNKNOWN);

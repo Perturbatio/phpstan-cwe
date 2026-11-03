@@ -21,6 +21,7 @@ final class Cwe78Rule implements Rule
 {
     public function __construct(private readonly int $minProbability = 0)
     {
+        // Check the minimum score when PHPStan creates this rule
         CweReport::isEnabled($minProbability, self::getLowestProbability());
     }
 
@@ -52,12 +53,14 @@ final class Cwe78Rule implements Rule
     public function processNode(Node $node, Scope $scope): array
     {
         $reports = [];
+        // The collector groups events by file. Check each file in source order
         /** @var array<string, list<Cwe78Event|null>> $eventsByFile */
         $eventsByFile = $node->get(Cwe78Collector::class);
         foreach ($eventsByFile as $file => $events) {
             $reports = array_merge($reports, $this->reportsForFile($file, $events));
         }
 
+        // An ignore must include a reason with at least two words
         /** @var array<string, list<Cwe78IgnoreEvent|null>> $ignoresByFile */
         $ignoresByFile = $node->get(Cwe78IgnoreCollector::class);
         foreach ($ignoresByFile as $file => $events) {
@@ -85,9 +88,11 @@ final class Cwe78Rule implements Rule
      */
     private function reportsForFile(string $file, array $events): array
     {
+        // Ignore missing events and sort the rest so assignments are known first
         $events = array_filter($events, static fn (?array $event): bool => $event !== null);
         usort($events, static fn (array $left, array $right): int => $left['offset'] <=> $right['offset']);
 
+        // Keep facts separate for each function or file scope
         $variablesByScope = [];
         $reports = [];
         foreach ($events as $event) {
@@ -95,10 +100,12 @@ final class Cwe78Rule implements Rule
             $variables = $variablesByScope[$event['scope']];
 
             if ($event['kind'] === 'assignment') {
+                // Save facts for later uses of this variable
                 $variablesByScope[$event['scope']][$event['variable']] = $this->resolveFacts($event, $variables, true);
                 continue;
             }
 
+            // A command may be unsafe even when no request source is known
             $facts = $this->resolveFacts($event, $variables, false);
             [$severity, $probability, $reason] = $this->rating($facts);
             if (!CweReport::isEnabled($this->minProbability, $probability)) {
@@ -118,6 +125,7 @@ final class Cwe78Rule implements Rule
      */
     private function resolveFacts(array $event, array $variables, bool $isAssignment): array
     {
+        // Combine facts from this expression and variables used by it
         $request = $event['request'];
         $hasStaticText = $event['hasStaticText'];
         $throughAssignment = $isAssignment && $request;
@@ -146,6 +154,7 @@ final class Cwe78Rule implements Rule
      */
     private function rating(array $facts): array
     {
+        // Give stronger scores when the collector finds a request source
         if (!$facts['request']) {
             return [
                 'low',
@@ -179,6 +188,7 @@ final class Cwe78Rule implements Rule
 
     private function wordCount(string $reason): int
     {
+        // Count words made from letters or numbers, including Unicode text
         preg_match_all('/[\p{L}\p{N}]+/u', $reason, $matches);
 
         return count($matches[0]);

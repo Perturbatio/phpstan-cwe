@@ -23,6 +23,7 @@ final class Cwe79BladeRule implements Rule
         private readonly array $directories,
         private readonly int $minProbability = 0,
     ) {
+        // Check the minimum score when PHPStan creates this rule.
         CweReport::isEnabled($minProbability, self::getProbability());
     }
 
@@ -45,16 +46,18 @@ final class Cwe79BladeRule implements Rule
 
     public function processNode(Node $node, Scope $scope): array
     {
+        // Skip scans when PHPStan found no Blade files or the rule is disabled
         if ($node->get(AnalysedFileCollector::class) === []
             || !CweReport::isEnabled($this->minProbability, self::getProbability())
         ) {
             return [];
         }
 
-        // Report the template location, not the PHP file that starts the scan.
+        // Report the template location, not the PHP file that starts the scan
         $errors = [];
         foreach ($this->scanner->scan($this->directories) as $finding) {
             if ($finding['type'] === 'unmatchedIgnore') {
+                // Tell the user when an ignore comment does not match an echo
                 $errors[] = \PHPStan\Rules\RuleErrorBuilder::message('No Blade raw echo matches @phpstan-ignore phpstanCwe.cwe79.')
                     ->identifier('phpstanCwe.ignoreUnmatched')
                     ->file($finding['file'])
@@ -62,6 +65,7 @@ final class Cwe79BladeRule implements Rule
                     ->build();
                 continue;
             }
+            // A Blade raw echo skips the normal HTML escaping
             $errors[] = CweReport::make(
                 79,
                 'A Blade raw echo prints a value without HTML escape.',

@@ -52,6 +52,7 @@ use PHPStan\Type\ObjectType;
  */
 final class Cwe89LaravelCollector implements Collector
 {
+    // These classes provide methods that accept raw SQL text.
     /** @return list<string> */
     public static function getBuilderClasses(): array
     {
@@ -91,13 +92,14 @@ final class Cwe89LaravelCollector implements Collector
     /** @return LaravelSqlEvent|null */
     public function processNode(Node $node, Scope $scope): ?array
     {
+        // Save assignments so the rule can follow simple local variables
         if (($node instanceof Assign || $node instanceof ConcatAssign)
             && $node->var instanceof Variable
             && is_string($node->var->name)
         ) {
             $facts = $this->expressionFacts($node->expr, $scope);
             if ($node instanceof ConcatAssign) {
-                // The .= operation also reads the old value of the variable
+                // Concatenation also keeps the old value of the variable
                 $facts = $this->mergeFacts(
                     $facts,
                     ['dynamic' => true, 'request' => false, 'unknown' => false, 'variables' => [$node->var->name]],
@@ -120,7 +122,7 @@ final class Cwe89LaravelCollector implements Collector
             return null;
         }
 
-        // Store the SQL value facts so the rule can check its source
+        // Store facts about SQL text so the rule can check its source
         $facts = $this->expressionFacts($query, $scope);
 
         return [
@@ -136,6 +138,7 @@ final class Cwe89LaravelCollector implements Collector
 
     private function getQueryExpression(Node $node, Scope $scope): ?Expr
     {
+        // Check raw query methods only on known Laravel query builders
         if ($node instanceof MethodCall && $node->name instanceof Identifier
             && in_array(strtolower($node->name->toString()), self::getRawMethods(), true)
         ) {
@@ -152,6 +155,7 @@ final class Cwe89LaravelCollector implements Collector
             && $node->class instanceof Name
             && $this->isDatabaseFacade($node->class, $scope)
         ) {
+            // The DB facade accepts SQL text in its first argument.
             return $this->argument($node->args, ['query', 'sql']);
         }
 
@@ -164,7 +168,7 @@ final class Cwe89LaravelCollector implements Collector
             return true;
         }
 
-        // Laravel can register DB as a global class alias without a use statement.
+        // Laravel can register DB as a global class alias without a use statement
         return $class->isUnqualified() && strtolower($class->toString()) === 'db';
     }
 
@@ -174,6 +178,7 @@ final class Cwe89LaravelCollector implements Collector
      */
     private function argument(array $arguments, array $names): ?Expr
     {
+        // Use a matching named argument when present
         foreach ($arguments as $argument) {
             if ($argument instanceof Arg && $argument->name !== null
                 && in_array(strtolower($argument->name->toString()), $names, true)
@@ -196,6 +201,7 @@ final class Cwe89LaravelCollector implements Collector
      */
     private function expressionFacts(Node $node, Scope $scope): array
     {
+        // A local variable needs facts from its earlier assignment
         if ($node instanceof Variable) {
             if (!is_string($node->name)) {
                 return ['dynamic' => true, 'request' => false, 'unknown' => true, 'variables' => []];
@@ -207,19 +213,16 @@ final class Cwe89LaravelCollector implements Collector
             return ['dynamic' => true, 'request' => false, 'unknown' => false, 'variables' => [$node->name]];
         }
 
-        // Check the receiver type. A method named wrap() on another class
-        // does not prove that the result has SQL identifier protection.
+        // Only Laravel's grammar can wrap an SQL identifier safely
+        // A method with the same name on another class does not count
         if ($node instanceof MethodCall && $node->name instanceof Identifier
             && strtolower($node->name->toString()) === 'wrap'
             && (new ObjectType('Illuminate\Database\Grammar'))->isSuperTypeOf($scope->getType($node->var))->yes()
         ) {
             $column = $this->argument($node->args, ['value']);
-            // Read the first argument or the named value argument.
-            // Accept only strings: Laravel returns raw expression objects
-            // without identifier quoting.
+            // Check strings only. Laravel does not quote raw expression objects
             if ($column !== null && $scope->getType($column)->isString()->yes()) {
-                // Do not track the input as unprotected SQL. This result is
-                // protected as an identifier, not as a quoted string value.
+                // Identifier wrapping does not protect SQL string values
                 return $this->emptyFacts();
             }
         }
@@ -227,6 +230,7 @@ final class Cwe89LaravelCollector implements Collector
         if ($node instanceof Expr\FuncCall && $node->name instanceof Name
             && strtolower($node->name->toString()) === 'request'
         ) {
+            // Laravel's request() helper returns request data
             $facts = $this->childrenFacts($node, $scope);
             $facts['dynamic'] = true;
             $facts['request'] = true;
@@ -239,6 +243,7 @@ final class Cwe89LaravelCollector implements Collector
             || $node instanceof Expr\StaticCall || $node instanceof Expr\New_
             || $node instanceof Expr\PropertyFetch || $node instanceof Expr\NullsafePropertyFetch
         ) {
+            // Mark values from calls as unknown unless a rule above can classify them
             $facts['dynamic'] = true;
             $facts['unknown'] = true;
         }
@@ -251,8 +256,7 @@ final class Cwe89LaravelCollector implements Collector
      */
     private function childrenFacts(Node $node, Scope $scope): array
     {
-        // Keep the scope when checking child expressions. PHPStan uses it
-        // to find the grammar type and the wrap() argument type.
+        // Keep the scope so PHPStan can check grammar and argument types
         $facts = $this->emptyFacts();
         foreach ($node->getSubNodeNames() as $name) {
             $child = $node->$name;
@@ -280,6 +284,7 @@ final class Cwe89LaravelCollector implements Collector
      */
     private function mergeFacts(array $left, array $right): array
     {
+        // Combine source facts and keep each variable name once
         return [
             'dynamic' => $left['dynamic'] || $right['dynamic'],
             'request' => $left['request'] || $right['request'],
@@ -297,6 +302,7 @@ final class Cwe89LaravelCollector implements Collector
     /** @return array{file: string, scope: string, offset: int} */
     private function eventBase(int $offset, Scope $scope): array
     {
+        // Use class and function names to keep facts separate by scope
         $function = $scope->getFunction();
         $callable = $function?->getName() ?? 'file';
         $class = $scope->getClassReflection()?->getName() ?? '';

@@ -218,3 +218,12 @@ Fix:
 ```PHP
 $query->selectRaw("DATE_FORMAT(created_at, '?') as ?", [$format, $alias]);
 ```
+
+Or ensure the alias is wrapped and the type of the value is declared as a string:
+```PHP
+function getFormattedDate(Builder $query, string $format = '%Y%m%d', string $alias = 'formatted_date'): Builder
+{
+    $alias = $query->getQuery()->getGrammar()->wrap($alias);
+    $query->selectRaw("DATE_FORMAT(created_at, ?) as {$alias}", [$format]);
+}
+```
