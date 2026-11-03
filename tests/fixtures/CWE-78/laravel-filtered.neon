@@ -1,5 +1,5 @@
 includes:
-    - ../../../cwe78-laravel.neon
+    - ../../../config/cwe78-laravel.neon
 
 parameters:
     phpstanCwe:

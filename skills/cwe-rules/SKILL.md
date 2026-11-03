@@ -61,15 +61,15 @@ For a rule for CWE-NN, use these files:
 |------|---------|
 | `src/Rules/CweNN/CweNNRule.php` | Rule class. Add a suffix for a different sink, for example `CweNNBladeRule.php`. |
 | `src/Rules/CweNN/CweNNRule.md` | Rule document. It has the same name as the class. |
-| `rules/cweNN.neon` | Service registration only. |
-| `cweNN.neon` | Public file for one rule. It includes `config.neon` and `rules/cweNN.neon`. |
-| `extension.neon` | Includes `config.neon` one time and each `rules/*.neon` file. |
+| `config/rules/cweNN.neon` | Service registration only. |
+| `config/cweNN.neon` | Public file for one rule. It includes `parameters.neon` and `rules/cweNN.neon`, relative to `config/`. |
+| `extension.neon` | Includes `config/parameters.neon` one time and each `config/rules/*.neon` file. |
 | `tests/fixtures/CWE-NN/` | All fixtures for this CWE. |
 | `tests/fixtures/shared/` | Fixtures that more than one CWE uses. |
 | `tests/Integration/CweNNRuleTest.php` | PHPStan rule test. |
 | `tests/Unit/` | Tests for shared classes that do not run PHPStan. |
 
-Do not include `config.neon` in a `rules/*.neon` file. PHPStan stops if it
+Do not include `config/parameters.neon` in a `config/rules/*.neon` file. PHPStan stops if it
 includes one file more than one time.
 
 ## Rule class
@@ -114,7 +114,7 @@ CWE-NN: <reason> Severity: <severity>. Probability: <score>%. https://cwe.mitre.
 
 ## Configuration
 
-- Register each rule as a service in `rules/cweNN.neon`:
+- Register each rule as a service in `config/rules/cweNN.neon`:
 
 ```neon
 services:
@@ -126,13 +126,13 @@ services:
             - phpstan.rules.rule
 ```
 
-- Put all package parameters under `phpstanCwe` in `config.neon`.
+- Put all package parameters under `phpstanCwe` in `config/parameters.neon`.
 - Add each new parameter to `parametersSchema`.
 - Register a service for each class that the rule needs.
 - Give a default that works in a normal project. If the default path is
   not in the project, skip it. If the user sets a path that does not
   exist, stop with an error.
-- Add the rule to `extension.neon` and make a public `cweNN.neon` file.
+- Add the rule to `extension.neon` and make a public `config/cweNN.neon` file.
 
 ## Templates and other non-PHP files
 

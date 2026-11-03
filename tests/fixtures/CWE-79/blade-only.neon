@@ -1,5 +1,5 @@
 includes:
-    - ../../../cwe79-blade.neon
+    - ../../../config/cwe79-blade.neon
 
 parameters:
     phpstanCwe:

@@ -37,7 +37,7 @@ Protected Laravel example:
 echo htmlspecialchars(request('name'));
 ```
 
-Laravel input checks are enabled in both `cwe79.neon` and `extension.neon`.
+Laravel input checks are enabled in both `config/cwe79.neon` and `extension.neon`.
 They use the shared `LaravelRequestInput` class, as the CWE-78 variant does.
 The severity, probability, and `phpstanCwe.cwe79` identifier do not change.
 The Blade rule does not change.

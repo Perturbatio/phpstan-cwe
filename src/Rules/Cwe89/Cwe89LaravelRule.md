@@ -80,6 +80,6 @@ values. Use bound parameters for values. If a user can select a column,
 also check that the user has permission to use that column.
 
 To see an example output of this rule run:
-```vendor/bin/phpstan analyse tests/fixtures/CWE-89/laravel.php --configuration=cwe89-laravel.neon --level=0 --no-progress```
+```vendor/bin/phpstan analyse tests/fixtures/CWE-89/laravel.php --configuration=config/cwe89-laravel.neon --level=0 --no-progress```
 
 Full explanation: https://cwe.mitre.org/data/definitions/89.html

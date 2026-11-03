@@ -82,16 +82,16 @@ it('loads both rules with identifiers and MITRE links', function (): void {
 });
 
 it('loads a single rule when selected', function (): void {
-    $result = analyseWithConfig('cwe78.neon', 'tests/fixtures/CWE-78/cwe78.php');
+    $result = analyseWithConfig('config/cwe78.neon', 'tests/fixtures/CWE-78/cwe78.php');
     expect(array_unique(array_column(array_values($result['files'])[0]['messages'], 'identifier')))
         ->toBe(['phpstanCwe.cwe78']);
 
-    $result = analyseWithConfig('cwe79.neon');
+    $result = analyseWithConfig('config/cwe79.neon');
     $messages = array_values($result['files'])[0]['messages'];
 
     expect(array_column($messages, 'identifier'))->toBe(['phpstanCwe.cwe79']);
 
-    $result = analyseWithConfig('cwe89.neon');
+    $result = analyseWithConfig('config/cwe89.neon');
     $messages = array_values($result['files'])[0]['messages'];
 
     expect(array_column($messages, 'identifier'))->toBe(['phpstanCwe.cwe89']);
@@ -109,10 +109,10 @@ it('checks Laravel request input at HTML output with both package configurations
         ->and(array_column($messages, 'identifier'))->toBe(array_fill(0, count($expectedLines), 'phpstanCwe.cwe79'))
         ->and(array_column($messages, 'message'))->toBe(array_fill(0, count($expectedLines), $expectedMessage))
         ->and(array_column($messages, 'ignorable'))->toBe(array_fill(0, count($expectedLines), true));
-})->with(['cwe79.neon', 'extension.neon']);
+})->with(['config/cwe79.neon', 'extension.neon']);
 
 it('reports command sinks with context-based ratings and source lines', function (): void {
-    $result = analyseWithConfig('cwe78.neon', 'tests/fixtures/CWE-78/cwe78.php');
+    $result = analyseWithConfig('config/cwe78.neon', 'tests/fixtures/CWE-78/cwe78.php');
     $messages = array_values($result['files'])[0]['messages'];
 
     expect($result['totals']['file_errors'])->toBe(12)
@@ -187,10 +187,10 @@ it('loads Laravel request command checks without duplicate reports', function (s
                 'https://cwe.mitre.org/data/definitions/78.html',
             );
     }
-})->with(['cwe78-laravel.neon', 'extension.neon']);
+})->with(['config/cwe78-laravel.neon', 'extension.neon']);
 
 it('keeps the base command configuration independent of Laravel request sources', function (): void {
-    $result = analyseWithConfig('cwe78.neon', 'tests/fixtures/CWE-78/laravel.php');
+    $result = analyseWithConfig('config/cwe78.neon', 'tests/fixtures/CWE-78/laravel.php');
     $messages = array_values($result['files'])[0]['messages'];
 
     expect($messages)->toHaveCount(20)
@@ -207,7 +207,7 @@ it('keeps Laravel findings at the minimum score and filters weaker findings', fu
 });
 
 it('requires at least two words in a CWE-78 ignore reason', function (): void {
-    $result = analyseWithConfig('cwe78.neon', 'tests/fixtures/CWE-78/ignore.php');
+    $result = analyseWithConfig('config/cwe78.neon', 'tests/fixtures/CWE-78/ignore.php');
     $messages = array_values($result['files'])[0]['messages'];
 
     expect($result['totals']['file_errors'])->toBe(1)
@@ -217,7 +217,7 @@ it('requires at least two words in a CWE-78 ignore reason', function (): void {
 });
 
 it('loads the Laravel SQL rule from its public configuration', function (): void {
-    $result = analyseWithConfig('cwe89-laravel.neon', 'tests/fixtures/CWE-89/laravel.php');
+    $result = analyseWithConfig('config/cwe89-laravel.neon', 'tests/fixtures/CWE-89/laravel.php');
     $messages = array_values($result['files'])[0]['messages'];
     $expectedRequestMessage = 'CWE-89: Request input is used in Laravel raw SQL. Use a bound parameter. Severity: high. Probability: 80%. https://cwe.mitre.org/data/definitions/89.html';
     $expectedUnknownMessage = 'CWE-89: Warning: The source of a dynamic value in Laravel raw SQL is unknown. Use a bound parameter. Severity: high. Probability: 45%. https://cwe.mitre.org/data/definitions/89.html';
@@ -256,8 +256,8 @@ it('uses shared Laravel sources for raw SQL and direct database queries', functi
     $laravelLines = [48, 49, 50, 51, 52, 53, 54, 55, 56, 58, 60, 82, 83];
     $databaseLines = [61, 62, 63, 64, 68, 69, 70, 85];
     $expectedLines = match ($config) {
-        'cwe89-laravel.neon' => $laravelLines,
-        'cwe89.neon' => $databaseLines,
+        'config/cwe89-laravel.neon' => $laravelLines,
+        'config/cwe89.neon' => $databaseLines,
         default => array_merge($laravelLines, $databaseLines),
     };
     sort($expectedLines);
@@ -275,7 +275,7 @@ it('uses shared Laravel sources for raw SQL and direct database queries', functi
                 'https://cwe.mitre.org/data/definitions/89.html',
             );
     }
-})->with(['cwe89-laravel.neon', 'cwe89.neon', 'extension.neon']);
+})->with(['config/cwe89-laravel.neon', 'config/cwe89.neon', 'extension.neon']);
 
 it('filters reports below the minimum probability', function (): void {
     $result = analyseWithConfig('tests/fixtures/shared/filtered.neon');

@@ -1,0 +1,18 @@
+# Shared defaults and parameter schema for all CWE rules
+# Use extension.neon or a config/cwe*.neon file to load rules and these defaults
+# Do not include this file separately: PHPStan rejects duplicate includes
+# To change a default, set parameters.phpstanCwe in your PHPStan configuration
+parameters:
+    phpstanCwe:
+        # Report findings with a probability score at or above this value (0-100)
+        minProbability: 0
+        # Scan these directories and their child directories for Blade templates
+        # Relative paths start at the current working directory
+        # The default directory is skipped if absent. An absent custom path is an error
+        # Set [] to disable the Blade scan
+        bladeDirectories:
+            - resources/views
+
+# Define the accepted parameter names and types for PHPStan configuration checks
+parametersSchema:
+    phpstanCwe: structure([minProbability: int(), bladeDirectories: listOf(string())])

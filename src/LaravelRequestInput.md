@@ -15,22 +15,22 @@ rules. To enable one rule, use its public configuration:
 
 ```neon
 includes:
-    - vendor/perturbatio/phpstan-cwe/cwe78-laravel.neon
+    - vendor/perturbatio/phpstan-cwe/config/cwe78-laravel.neon
 ```
 
 For only the HTML rule:
 
 ```neon
 includes:
-    - vendor/perturbatio/phpstan-cwe/cwe79.neon
+    - vendor/perturbatio/phpstan-cwe/config/cwe79.neon
 ```
 
-For SQL checks, use `cwe89.neon` for PDO and mysqli, or
-`cwe89-laravel.neon` for Laravel raw SQL. Both detect the shared Laravel
+For SQL checks, use `config/cwe89.neon` for PDO and mysqli, or
+`config/cwe89-laravel.neon` for Laravel raw SQL. Both detect the shared Laravel
 request sources. Bound values do not become SQL text.
 
-`cwe78.neon` enables command checks without Laravel input detection.
-Do not include it with `cwe78-laravel.neon`. The Laravel command variant
+`config/cwe78.neon` enables command checks without Laravel input detection.
+Do not include it with `config/cwe78-laravel.neon`. The Laravel command variant
 uses the base command rule and does not add duplicate command reports.
 
 Laravel is not a package dependency. PHPStan must know the

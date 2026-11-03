@@ -1,8 +1,8 @@
 includes:
-    - config.neon
-    - rules/cwe79.neon
-    - rules/cwe79-blade.neon
-    - rules/cwe89.neon
-    - rules/cwe89-laravel.neon
-    # This file also includes the base rules/cwe78.neon file
-    - rules/cwe78-laravel.neon
+    - config/parameters.neon
+    - config/rules/cwe79.neon
+    - config/rules/cwe79-blade.neon
+    - config/rules/cwe89.neon
+    - config/rules/cwe89-laravel.neon
+    # This file also includes config/rules/cwe78.neon.
+    - config/rules/cwe78-laravel.neon

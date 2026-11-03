@@ -10,7 +10,7 @@ Its Laravel variant also checks the `request()` helper and input reads
 from `Illuminate\Http\Request` objects and their subclasses.
 The CWE-79 HTML rule checks the same Laravel request sources. Both rules
 use one shared source detector, but keep separate escape checks for shell
-arguments and HTML output. Laravel HTML checks are enabled in `cwe79.neon`
+arguments and HTML output. Laravel HTML checks are enabled in `config/cwe79.neon`
 and `extension.neon`.
 Both CWE-89 rules also use this shared detector for Laravel request sources.
 They keep their SQL-specific checks for query text and bound values.
@@ -44,12 +44,33 @@ includes:
 ```
 
 The default file enables all the rules. To use one rule,
-include the specific rule, e.g. `cwe78.neon`, `cwe78-laravel.neon`, `cwe79.neon`,
-`cwe79-blade.neon`, `cwe89.neon`, or `cwe89-laravel.neon` instead of
+include the specific rule, e.g. `config/cwe78.neon`, `config/cwe78-laravel.neon`,
+`config/cwe79.neon`, `config/cwe79-blade.neon`, `config/cwe89.neon`, or
+`config/cwe89-laravel.neon` instead of
 `extension.neon`.
 
-The full extension uses the Laravel CWE-78 variant. Use `cwe78.neon`
-for only the base command checks, or `cwe78-laravel.neon` to add Laravel
+For example, to enable only the PHP HTML rule:
+
+```neon
+includes:
+    - vendor/perturbatio/phpstan-cwe/config/cwe79.neon
+```
+
+Rule configuration files are grouped as follows:
+
+| Path | Purpose |
+|------|---------|
+| `extension.neon` | Main entry point. Enables all rules. |
+| `config/cwe*.neon` | Public entry points for individual rules. |
+| `config/parameters.neon` | Shared defaults and parameter schema. |
+| `config/rules/` | Internal rule and collector service definitions. |
+
+The individual rule files were moved from the package root to `config/`.
+Update existing single-rule include paths to use this directory.
+The `extension.neon` path has not changed.
+
+The full extension uses the Laravel CWE-78 variant. Use `config/cwe78.neon`
+for only the base command checks, or `config/cwe78-laravel.neon` to add Laravel
 request sources. Do not include both files. Both use `phpstanCwe.cwe78`
 and report each command only once. See the
 [shared Laravel input document](src/LaravelRequestInput.md)
