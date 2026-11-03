@@ -39,7 +39,7 @@ can add a reason in parentheses:
 The comment can also be on the same line before the raw echo. Only spaces
 can separate the comment and the echo on that line. If they are on two lines,
 only spaces and one line break can separate them. A blank line or other
-template code stops the ignore. An ignore without a matching raw echo gets
+template code stops the ignore annotation. An ignore without a matching raw echo gets
 an error with the identifier `phpstanCwe.ignoreUnmatched`. Blade comments
 do not use PHPStan's built-in PHP comment parser. This rule applies the
 same identifier form only to Blade raw echoes.

@@ -27,7 +27,7 @@ final class Cwe78IgnoreCollector implements Collector
     /** @return Cwe78IgnoreEvent|null */
     public function processNode(Node $node, Scope $scope): ?array
     {
-        // Only check comments on statements that can contain an ignore
+        // Only check comments on statements that can contain an ignore annotation
         if (!$node instanceof Expression) {
             return null;
         }

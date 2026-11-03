@@ -95,7 +95,7 @@ echo htmlspecialchars(request('name'));
 
 The HTML rule accepts its supported HTML escape calls and numeric casts.
 HTML escaping does not protect a shell command. See each rule document
-for its exact escape checks and output limits.
+for its exact escape checks and output limitations.
 
 For SQL, bind request values instead of adding them to query text:
 
@@ -123,7 +123,7 @@ Set `phpstanCwe.minProbability` to filter these reports. The default is
 `0`. Use the rule's error identifier for an inline PHPStan ignore.
 CWE-78 ignores must give a reason with at least two words.
 
-## Known limits
+## Known limitations
 
 - The detector identifies sources in the current expression. It does not
   trace assignments or follow input across functions, branches, or loops.
@@ -133,7 +133,7 @@ CWE-78 ignores must give a reason with at least two words.
 - It does not inspect request facades or custom input methods.
 - A different function called `request()` is not a request source.
 - An unrecognised source does not prove that a value is safe.
-- Each rule has more limits. See its rule document.
+- Each rule has more limitations. See its rule document.
 
 Full CWE explanations:
 

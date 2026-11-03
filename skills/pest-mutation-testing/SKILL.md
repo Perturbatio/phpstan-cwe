@@ -46,7 +46,7 @@ runtime does not execute its declaration. Use this order:
    getter method. Use the getter in the production logic.
 2. Add a test that calls the getter and checks its expected value. This makes
    a changed value visible to mutation testing.
-3. If a getter would add no useful behaviour, keep the property or constant.
+3. If a getter adds no useful behaviour, keep the property or constant.
    Add a test that checks its expected default value before the code uses it.
    Then ignore only that mutation.
 

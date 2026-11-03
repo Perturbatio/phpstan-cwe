@@ -65,16 +65,14 @@ Rule configuration files are grouped as follows:
 | `config/parameters.neon` | Shared defaults and parameter schema. |
 | `config/rules/` | Internal rule and collector service definitions. |
 
-The individual rule files were moved from the package root to `config/`.
-Update existing single-rule include paths to use this directory.
-The `extension.neon` path has not changed.
+The individual rule files are located in `config/`.
 
 The full extension uses the Laravel CWE-78 variant. Use `config/cwe78.neon`
 for only the base command checks, or `config/cwe78-laravel.neon` to add Laravel
 request sources. Do not include both files. Both use `phpstanCwe.cwe78`
 and report each command only once. See the
 [shared Laravel input document](src/LaravelRequestInput.md)
-for supported request methods, ratings, and limits.
+for supported request methods, ratings, and limitations.
 
 If you want to include all rules but ignore a specific rule.
 You cannot exclude a specific rule once loaded, so it will still be processed by PHPStan, but you _can_ ignore the errors it produces.
@@ -146,7 +144,7 @@ Read [CWE-78](src/Rules/Cwe78/Cwe78Rule.md), [CWE-79](src/Rules/Cwe79/Cwe79Rule.
 [CWE-79 in Blade](src/Rules/Cwe79/Cwe79BladeRule.md) and
 [CWE-89](src/Rules/Cwe89/Cwe89Rule.md) and
 [CWE-89 in Laravel query builders](src/Rules/Cwe89/Cwe89LaravelRule.md) for
-examples and limits.
+examples and limitations.
 
 ## Check code style
 

@@ -98,7 +98,7 @@ The first version does not check these functions:
 - `mail()` and `imap_open()` can depend on external programs or
   configuration. This rule does not infer that behaviour.
 
-## Known limits
+## Known limitations
 
 - The rule follows simple assignments in source order in one function or
   method. It does not follow a value through a function or merge values
