@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use Perturbatio\PhpstanCwe\Rules\Cwe89Rule;
+use Perturbatio\PhpstanCwe\Rules\Cwe89\Cwe89Rule;
 use Perturbatio\PhpstanCwe\RequestInput;
 use PhpParser\Node;
 use PHPStan\Rules\Rule;

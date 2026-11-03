@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Perturbatio\PhpstanCwe\Rules;
+namespace Perturbatio\PhpstanCwe\Rules\Cwe89;
 
 use Perturbatio\PhpstanCwe\CweReport;
 use PhpParser\Node;
@@ -89,6 +89,7 @@ final class Cwe89LaravelRule implements Rule
                 $probability,
                 $file,
                 $event['line'],
+                tip: 'If you use wrap() for an SQL identifier, verify that PHPStan knows the argument is a string and the receiver is Illuminate\Database\Grammar or a subclass. Add or correct parameter types where needed. A string type alone does not make raw SQL safe. Use bound parameters for values.',
             );
         }
 

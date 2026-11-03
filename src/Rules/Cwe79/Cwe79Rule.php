@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Perturbatio\PhpstanCwe\Rules;
+namespace Perturbatio\PhpstanCwe\Rules\Cwe79;
 
 use Perturbatio\PhpstanCwe\CweReport;
 use Perturbatio\PhpstanCwe\RequestInput;

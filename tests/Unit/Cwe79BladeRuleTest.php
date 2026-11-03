@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 use Perturbatio\PhpstanCwe\Blade\AnalysedFileCollector;
 use Perturbatio\PhpstanCwe\Blade\BladeTemplateScanner;
-use Perturbatio\PhpstanCwe\Rules\Cwe79BladeRule;
+use Perturbatio\PhpstanCwe\Rules\Cwe79\Cwe79BladeRule;
 use PHPStan\Analyser\Scope;
 use PHPStan\Node\CollectedDataNode;
 use PHPStan\Rules\IdentifierRuleError;

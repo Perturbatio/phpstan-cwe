@@ -28,8 +28,8 @@ For a rule for CWE-NN, use these files:
 
 | File | Purpose |
 |------|---------|
-| `src/Rules/CweNNRule.php` | Rule class. Add a suffix for a different sink, for example `CweNNBladeRule.php`. |
-| `src/Rules/CweNNRule.md` | Rule document. It has the same name as the class. |
+| `src/Rules/CweNN/CweNNRule.php` | Rule class. Add a suffix for a different sink, for example `CweNNBladeRule.php`. |
+| `src/Rules/CweNN/CweNNRule.md` | Rule document. It has the same name as the class. |
 | `rules/cweNN.neon` | Service registration only. |
 | `cweNN.neon` | Public file for one rule. It includes `config.neon` and `rules/cweNN.neon`. |
 | `extension.neon` | Includes `config.neon` one time and each `rules/*.neon` file. |
@@ -88,7 +88,7 @@ CWE-NN: <reason> Severity: <severity>. Probability: <score>%. https://cwe.mitre.
 ```neon
 services:
     -
-        class: Perturbatio\PhpstanCwe\Rules\CweNNRule
+        class: Perturbatio\PhpstanCwe\Rules\CweNN\CweNNRule
         arguments:
             minProbability: %phpstanCwe.minProbability%
         tags:

@@ -2,8 +2,8 @@
 
 declare(strict_types=1);
 
-use Perturbatio\PhpstanCwe\Rules\Cwe89LaravelRule;
-use Perturbatio\PhpstanCwe\Rules\Cwe89LaravelCollector;
+use Perturbatio\PhpstanCwe\Rules\Cwe89\Cwe89LaravelRule;
+use Perturbatio\PhpstanCwe\Rules\Cwe89\Cwe89LaravelCollector;
 use PhpParser\Node\Arg;
 use PhpParser\Node\Expr\StaticCall;
 use PhpParser\Node\Identifier;
@@ -74,6 +74,9 @@ it('reports a known request source traced through a local assignment', function 
         ->and($errors[0]->getIdentifier())->toBe('phpstanCwe.cwe89')
         ->and($errors[0]->getMessage())->toBe(
             'CWE-89: Request input is used in Laravel raw SQL. Use a bound parameter. Severity: high. Probability: 80%. https://cwe.mitre.org/data/definitions/89.html',
+        )
+        ->and($errors[0]->getTip())->toBe(
+            'If you use wrap() for an SQL identifier, verify that PHPStan knows the argument is a string and the receiver is Illuminate\Database\Grammar or a subclass. Add or correct parameter types where needed. A string type alone does not make raw SQL safe. Use bound parameters for values.',
         );
 });
 
@@ -95,6 +98,9 @@ it('reports an unknown source with a lower confidence and warning', function ():
         ->and($errors[0]->getIdentifier())->toBe('phpstanCwe.cwe89')
         ->and($errors[0]->getMessage())->toBe(
             'CWE-89: Warning: The source of a dynamic value in Laravel raw SQL is unknown. Use a bound parameter. Severity: high. Probability: 45%. https://cwe.mitre.org/data/definitions/89.html',
+        )
+        ->and($errors[0]->getTip())->toBe(
+            'If you use wrap() for an SQL identifier, verify that PHPStan knows the argument is a string and the receiver is Illuminate\Database\Grammar or a subclass. Add or correct parameter types where needed. A string type alone does not make raw SQL safe. Use bound parameters for values.',
         );
 });
 

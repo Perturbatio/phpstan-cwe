@@ -1,6 +1,6 @@
 services:
     -
-        class: Perturbatio\PhpstanCwe\Rules\Cwe79Rule
+        class: Perturbatio\PhpstanCwe\Rules\Cwe79\Cwe79Rule
         arguments:
             minProbability: %phpstanCwe.minProbability%
         tags:

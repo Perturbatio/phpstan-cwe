@@ -80,7 +80,7 @@ To ignore one Blade raw echo, put a Blade comment immediately before it:
 ```
 
 An ignore with no matching raw echo gets a report. See the
-[Blade rule document](src/Rules/Cwe79BladeRule.md) for the exact placement.
+[Blade rule document](src/Rules/Cwe79/Cwe79BladeRule.md) for the exact placement.
 
 ## Set a minimum probability score
 
@@ -106,10 +106,10 @@ comments must include a reason with at least two words. A short reason is
 reported with `phpstanCwe.ignoreReason`.
 The same data is in the PHPStan error metadata.
 
-Read [CWE-78](src/Rules/Cwe78Rule.md), [CWE-79](src/Rules/Cwe79Rule.md) and
-[CWE-79 in Blade](src/Rules/Cwe79BladeRule.md) and
-[CWE-89](src/Rules/Cwe89Rule.md) and
-[CWE-89 in Laravel query builders](src/Rules/Cwe89LaravelRule.md) for
+Read [CWE-78](src/Rules/Cwe78/Cwe78Rule.md), [CWE-79](src/Rules/Cwe79/Cwe79Rule.md) and
+[CWE-79 in Blade](src/Rules/Cwe79/Cwe79BladeRule.md) and
+[CWE-89](src/Rules/Cwe89/Cwe89Rule.md) and
+[CWE-89 in Laravel query builders](src/Rules/Cwe89/Cwe89LaravelRule.md) for
 examples and limits.
 
 ## Check code style

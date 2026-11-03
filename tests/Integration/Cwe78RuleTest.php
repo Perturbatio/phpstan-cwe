@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-use Perturbatio\PhpstanCwe\Rules\Cwe78Collector;
-use Perturbatio\PhpstanCwe\Rules\Cwe78IgnoreCollector;
-use Perturbatio\PhpstanCwe\Rules\Cwe78Rule;
+use Perturbatio\PhpstanCwe\Rules\Cwe78\Cwe78Collector;
+use Perturbatio\PhpstanCwe\Rules\Cwe78\Cwe78IgnoreCollector;
+use Perturbatio\PhpstanCwe\Rules\Cwe78\Cwe78Rule;
 use PHPStan\Analyser\Scope;
 use PHPStan\Node\CollectedDataNode;
 use PHPStan\Rules\Rule;

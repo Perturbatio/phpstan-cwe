@@ -6,14 +6,14 @@ use Perturbatio\PhpstanCwe\Blade\AnalysedFileCollector;
 use Perturbatio\PhpstanCwe\Blade\BladeTemplateScanner;
 use Perturbatio\PhpstanCwe\CweReport;
 use Perturbatio\PhpstanCwe\RequestInput;
-use Perturbatio\PhpstanCwe\Rules\Cwe79BladeRule;
-use Perturbatio\PhpstanCwe\Rules\Cwe79Rule;
-use Perturbatio\PhpstanCwe\Rules\Cwe78Collector;
-use Perturbatio\PhpstanCwe\Rules\Cwe78IgnoreCollector;
-use Perturbatio\PhpstanCwe\Rules\Cwe78Rule;
-use Perturbatio\PhpstanCwe\Rules\Cwe89LaravelCollector;
-use Perturbatio\PhpstanCwe\Rules\Cwe89LaravelRule;
-use Perturbatio\PhpstanCwe\Rules\Cwe89Rule;
+use Perturbatio\PhpstanCwe\Rules\Cwe79\Cwe79BladeRule;
+use Perturbatio\PhpstanCwe\Rules\Cwe79\Cwe79Rule;
+use Perturbatio\PhpstanCwe\Rules\Cwe78\Cwe78Collector;
+use Perturbatio\PhpstanCwe\Rules\Cwe78\Cwe78IgnoreCollector;
+use Perturbatio\PhpstanCwe\Rules\Cwe78\Cwe78Rule;
+use Perturbatio\PhpstanCwe\Rules\Cwe89\Cwe89LaravelCollector;
+use Perturbatio\PhpstanCwe\Rules\Cwe89\Cwe89LaravelRule;
+use Perturbatio\PhpstanCwe\Rules\Cwe89\Cwe89Rule;
 
 // These tests check the package in a separate PHPStan process.
 // Pest does not collect coverage from that process.
@@ -172,7 +172,8 @@ it('loads the Laravel SQL rule from its public configuration', function (): void
             ? $expectedUnknownMessage
             : $expectedRequestMessage)
             ->and($message['identifier'])->toBe('phpstanCwe.cwe89')
-            ->and($message['ignorable'])->toBeTrue();
+            ->and($message['ignorable'])->toBeTrue()
+            ->and($message['tip'])->toBe('If you use wrap() for an SQL identifier, verify that PHPStan knows the argument is a string and the receiver is Illuminate\Database\Grammar or a subclass. Add or correct parameter types where needed. A string type alone does not make raw SQL safe. Use bound parameters for values.');
     }
 });
 

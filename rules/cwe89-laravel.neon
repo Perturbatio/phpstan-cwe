@@ -1,10 +1,10 @@
 services:
     -
-        class: Perturbatio\PhpstanCwe\Rules\Cwe89LaravelCollector
+        class: Perturbatio\PhpstanCwe\Rules\Cwe89\Cwe89LaravelCollector
         tags:
             - phpstan.collector
     -
-        class: Perturbatio\PhpstanCwe\Rules\Cwe89LaravelRule
+        class: Perturbatio\PhpstanCwe\Rules\Cwe89\Cwe89LaravelRule
         arguments:
             minProbability: %phpstanCwe.minProbability%
         tags:

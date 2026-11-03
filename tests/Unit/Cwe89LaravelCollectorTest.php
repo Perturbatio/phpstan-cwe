@@ -2,8 +2,8 @@
 
 declare(strict_types=1);
 
-use Perturbatio\PhpstanCwe\Rules\Cwe89LaravelCollector;
-use Perturbatio\PhpstanCwe\Rules\Cwe89LaravelRule;
+use Perturbatio\PhpstanCwe\Rules\Cwe89\Cwe89LaravelCollector;
+use Perturbatio\PhpstanCwe\Rules\Cwe89\Cwe89LaravelRule;
 use PhpParser\Node\Arg;
 use PhpParser\Node\Expr;
 use PhpParser\Node\Expr\Assign;

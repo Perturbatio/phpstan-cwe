@@ -46,6 +46,11 @@ reports other unbound dynamic values in the same SQL expression.
 It does not accept a raw expression object or an argument with an unknown
 type. Laravel can return raw expressions from `wrap()` without quoting them.
 
+Each report includes a tip to check these types when you use `wrap()`.
+Add or correct parameter types so PHPStan can identify the string argument
+and the Laravel grammar receiver. A string type alone does not make raw SQL
+safe. Use bound parameters for values.
+
 The rule follows simple local variable assignments and `.=` operations in
 one function or method in source order. It supports the `DB` facade import and Laravel's
 global `DB` alias. It reports direct request data with an **80%**

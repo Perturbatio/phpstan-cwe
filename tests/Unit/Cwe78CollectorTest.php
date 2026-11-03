@@ -2,8 +2,8 @@
 
 declare(strict_types=1);
 
-use Perturbatio\PhpstanCwe\Rules\Cwe78Collector;
-use Perturbatio\PhpstanCwe\Rules\Cwe78IgnoreCollector;
+use Perturbatio\PhpstanCwe\Rules\Cwe78\Cwe78Collector;
+use Perturbatio\PhpstanCwe\Rules\Cwe78\Cwe78IgnoreCollector;
 use PhpParser\Node\Arg;
 use PhpParser\Node\ArgPlaceholder;
 use PhpParser\Comment;
