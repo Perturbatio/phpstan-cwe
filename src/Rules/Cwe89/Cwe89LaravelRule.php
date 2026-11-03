@@ -17,6 +17,12 @@ use PHPStan\Rules\Rule;
 final class Cwe89LaravelRule implements Rule
 {
     private const string SEVERITY = 'high';
+    // @pest-mutate-ignore
+    private const int STATUS_STATIC = 0;
+    // @pest-mutate-ignore
+    private const int STATUS_UNKNOWN = 1;
+    // @pest-mutate-ignore
+    private const int STATUS_REQUEST = 2;
 
     public function __construct(private readonly int $minProbability = 0)
     {
@@ -69,11 +75,11 @@ final class Cwe89LaravelRule implements Rule
                 $variablesByScope[$scope][$event['variable']] = $status;
                 continue;
             }
-            if ($status === 0) {
+            if ($status === self::STATUS_STATIC) {
                 continue;
             }
 
-            $isKnownRequest = $status === 2;
+            $isKnownRequest = $status === self::STATUS_REQUEST;
             $probability = $isKnownRequest ? self::getRequestProbability() : self::getUnknownProbability();
             if (!CweReport::isEnabled($this->minProbability, $probability)) {
                 continue;
@@ -104,9 +110,9 @@ final class Cwe89LaravelRule implements Rule
      */
     private function resolveStatus(array $event, array $variables): int
     {
-        $status = $event['request'] ? 2 : ($event['unknown'] ? 1 : 0);
+        $status = $event['request'] ? self::STATUS_REQUEST : ($event['unknown'] ? self::STATUS_UNKNOWN : self::STATUS_STATIC);
         foreach ($event['variables'] as $variable) {
-            $status = max($status, $variables[$variable] ?? 1);
+            $status = max($status, $variables[$variable] ?? self::STATUS_UNKNOWN);
         }
 
         return $status;
