@@ -78,6 +78,8 @@ namespace PHPStan\Analyser {
 
         public function getClassReflection(): ?\PHPStan\Reflection\ClassReflection;
 
+        public function isInAnonymousFunction(): bool;
+
         public function getType(\PhpParser\Node\Expr $node): \PHPStan\Type\Type;
 
         public function resolveName(\PhpParser\Node\Name $name): string;

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Perturbatio\PhpstanCwe\Rules\Cwe78;
 
 use Perturbatio\PhpstanCwe\CweReport;
+use Perturbatio\PhpstanCwe\LocalAssignmentFlow;
 use PhpParser\Node;
 use PHPStan\Analyser\Scope;
 use PHPStan\Node\CollectedDataNode;
@@ -88,25 +89,9 @@ final class Cwe78Rule implements Rule
      */
     private function reportsForFile(string $file, array $events): array
     {
-        // Ignore missing events and sort the rest so assignments are known first
-        $events = array_filter($events, static fn (?array $event): bool => $event !== null);
-        usort($events, static fn (array $left, array $right): int => $left['offset'] <=> $right['offset']);
-
-        // Keep facts separate for each function or file scope
-        $variablesByScope = [];
         $reports = [];
-        foreach ($events as $event) {
-            $variablesByScope[$event['scope']] ??= [];
-            $variables = $variablesByScope[$event['scope']];
-
-            if ($event['kind'] === 'assignment') {
-                // Save facts for later uses of this variable
-                $variablesByScope[$event['scope']][$event['variable']] = $this->resolveFacts($event, $variables, true);
-                continue;
-            }
-
+        foreach (LocalAssignmentFlow::sinks($events, $this->resolveFacts(...)) as [$event, $facts]) {
             // A command may be unsafe even when no request source is known
-            $facts = $this->resolveFacts($event, $variables, false);
             [$severity, $probability, $reason] = $this->rating($facts);
             if (!CweReport::isEnabled($this->minProbability, $probability)) {
                 continue;

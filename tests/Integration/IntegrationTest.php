@@ -100,7 +100,7 @@ it('loads a single rule when selected', function (): void {
 it('checks Laravel request input at HTML output with both package configurations', function (string $config): void {
     $result = analyseWithConfig($config, 'tests/fixtures/CWE-79/laravel.php');
     $messages = array_values($result['files'])[0]['messages'];
-    $expectedLines = [52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 67, 68, 74, 85];
+    $expectedLines = [52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 67, 68, 73, 74, 85];
     $expectedMessage = 'CWE-79: Request input is sent to HTML without an HTML escape call. Severity: high. Probability: 80%. https://cwe.mitre.org/data/definitions/79.html';
 
     expect($result['totals']['file_errors'])->toBe(count($expectedLines))
@@ -109,6 +109,23 @@ it('checks Laravel request input at HTML output with both package configurations
         ->and(array_column($messages, 'identifier'))->toBe(array_fill(0, count($expectedLines), 'phpstanCwe.cwe79'))
         ->and(array_column($messages, 'message'))->toBe(array_fill(0, count($expectedLines), $expectedMessage))
         ->and(array_column($messages, 'ignorable'))->toBe(array_fill(0, count($expectedLines), true));
+})->with(['config/cwe79.neon', 'extension.neon']);
+
+it('tracks assigned HTML input with both package configurations', function (string $config): void {
+    $result = analyseWithConfig($config, 'tests/fixtures/CWE-79/assignments.php');
+    $messages = array_values($result['files'])[0]['messages'];
+    $expectedLines = [6, 8, 11, 13, 15, 19, 29, 31, 34, 39, 52, 65, 71, 73];
+
+    expect(array_column($messages, 'line'))->toBe($expectedLines)
+        ->and(array_column($messages, 'identifier'))->toBe(array_fill(0, count($expectedLines), 'phpstanCwe.cwe79'))
+        ->and(array_column($messages, 'ignorable'))->toBe(array_fill(0, count($expectedLines), true));
+    foreach ($messages as $message) {
+        expect($message['message'])->toContain(
+            'Severity: high.',
+            'Probability: 80%.',
+            'https://cwe.mitre.org/data/definitions/79.html',
+        );
+    }
 })->with(['config/cwe79.neon', 'extension.neon']);
 
 it('reports command sinks with context-based ratings and source lines', function (): void {

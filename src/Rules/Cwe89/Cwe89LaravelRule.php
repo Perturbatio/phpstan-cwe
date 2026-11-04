@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Perturbatio\PhpstanCwe\Rules\Cwe89;
 
 use Perturbatio\PhpstanCwe\CweReport;
+use Perturbatio\PhpstanCwe\LocalAssignmentFlow;
 use PhpParser\Node;
 use PHPStan\Analyser\Scope;
 use PHPStan\Node\CollectedDataNode;
@@ -62,24 +63,8 @@ final class Cwe89LaravelRule implements Rule
      */
     private function reportsForFile(string $file, array $events): array
     {
-        // Sort events so each assignment is known before later uses
-        $events = array_filter($events, static fn (?array $event): bool => $event !== null);
-        usort($events, static fn (array $left, array $right): int => $left['offset'] <=> $right['offset']);
-
-        // Keep variable facts separate for each class and function
-        $variablesByScope = [];
         $reports = [];
-        foreach ($events as $event) {
-            $scope = $event['scope'];
-            $variablesByScope[$scope] ??= [];
-            $variables = $variablesByScope[$scope];
-            $status = $this->resolveStatus($event, $variables);
-
-            if ($event['kind'] === 'assignment') {
-                // Save the source status for later query calls
-                $variablesByScope[$scope][$event['variable']] = $status;
-                continue;
-            }
+        foreach (LocalAssignmentFlow::sinks($events, $this->resolveStatus(...)) as [$event, $status]) {
             if ($status === self::STATUS_STATIC) {
                 continue;
             }

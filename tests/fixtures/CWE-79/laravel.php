@@ -70,7 +70,7 @@ namespace {
         echo $request->method(); // No report: This is not a supported input method.
         echo 'fixed-text'; // No report: There is no request input.
         $name = $request->input('name');
-        echo $name; // No report: The rule does not follow local assignments.
+        echo $name; // Report: The assigned value holds request input.
         echo escapeshellarg(request('name')); // Report: Shell escaping does not protect HTML.
     }
 }

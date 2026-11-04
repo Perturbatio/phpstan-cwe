@@ -1,5 +1,9 @@
 services:
     -
+        class: Perturbatio\PhpstanCwe\Rules\Cwe79\Cwe79Collector
+        tags:
+            - phpstan.collector
+    -
         class: Perturbatio\PhpstanCwe\Rules\Cwe79\Cwe79Rule
         arguments:
             minProbability: %phpstanCwe.minProbability%

@@ -1,6 +1,6 @@
 ---
 name: cwe-rules
-description: "Use this skill when you create, change, or review a CWE rule in this package. Trigger when work touches src/Rules, shared input detectors, rule NEON files, rule documents, CWE fixtures, or rule tests. Covers shared input detection, file names, report format, configuration, ignore comments, documents, fixtures, and tests."
+description: "Use this skill when you create, change, or review a CWE rule in this package. Trigger when work touches src/Rules, shared input detectors, assignment flow, rule NEON files, rule documents, CWE fixtures, or rule tests. Covers shared input detection, local assignment tracking, file names, report format, configuration, ignore comments, documents, fixtures, and tests."
 license: MIT
 ---
 
@@ -18,8 +18,9 @@ documents in ASD-STE100 Simplified Technical English.
   safe only because it has a type.
 - Put a clear list of known limits in the rule document.
 - Keep rule classes small. Move shared logic into a separate class.
-  Examples: `CweReport`, `RequestInput`, `BladeTemplateScanner`.
+  Examples: `CweReport`, `RequestInput`, `LocalAssignmentFlow`, `BladeTemplateScanner`.
 - Before you write new logic, look for a class that you can use again.
+- If the logic exists in another rule, move it into a shared class instead of copying/rewriting it.
 - Use descriptive names for variables and methods.
 
 ## Shared input detection
@@ -52,6 +53,52 @@ documents in ASD-STE100 Simplified Technical English.
   single-rule configuration and `extension.neon`.
 - Keep the shared source list and limits in `src/LaravelRequestInput.md`.
   Link to this document from rule documents instead of copying the list.
+
+## Shared local assignment flow
+
+- Before you add assignment tracking, read `src/LocalAssignmentFlow.php`,
+  `src/Rules/Cwe79/Cwe79Collector.php`, and the flow use in `Cwe79Rule`,
+  `Cwe78Rule`, and `Cwe89LaravelRule`.
+- When a new or changed rule must follow local assigned values, use
+  `LocalAssignmentFlow::sinks()`. Do not copy event sorting, variable storage,
+  or scope handling into the rule. Rules that check direct expressions only
+  do not need assignment flow.
+- Use a PHPStan collector to record assignment and sink events. Register it
+  with `phpstan.collector`. Use a rule for `CollectedDataNode` to read the
+  events. In `RuleTestCase`, return the collector from `getCollectors()`.
+- Process each file's events separately. Each event needs `kind`, `scope`,
+  and `offset`. Use `kind: 'assignment'` with a `variable` name for assignments,
+  or `kind: 'sink'` for output or calls. Sinks also need a report line.
+  Keep the facts that the rule needs in each event.
+- Use source token positions for offsets. Choose positions that preserve the
+  supported evaluation order. Test assignments near sinks and document
+  unsupported nested assignments.
+- Keep facts separate by class and named function. Do not mix closure facts
+  with the outer scope. Add explicit closure support or document its limits.
+- Give `sinks()` a resolver with the event, current scope's variable facts,
+  and assignment flag as arguments. The resolver returns the new facts.
+  The flow saves assignment facts and returns `[sinkEvent, resolvedFacts]`
+  pairs for reports. A replacement assignment must replace the old facts.
+  A copied value must keep the facts from the time of the copy.
+- For `.=` support, record the target variable as a dependency as well as
+  variables in the new expression. This keeps the earlier value.
+- Keep source detection, protections, sink selection, and report ratings in
+  the detector, collector, or rule that owns them. The shared flow must not
+  treat an HTML escape as SQL or shell protection.
+- For HTML facts, reuse `RequestInput::inHtml()` with its optional variable
+  callback. The collector can record each variable name and return `false`
+  to continue the scan. Accepted HTML escapes and numeric casts stop the scan.
+  Do not add a separate variable scan that bypasses these protections.
+- Add tests for copies, replacement assignments, concatenation, `.=` when
+  supported, interpolation, accepted protections, unknown variables, separate
+  scopes, and file isolation. Check positive and negative cases through both
+  the single-rule configuration and `extension.neon`.
+- If the shared flow changes, run its unit tests and the rule tests for all
+  callers. Keep their ratings and reports unchanged unless the task requires
+  a change.
+- State that this helper processes source order only. It does not merge
+  branches, repeat loops, or follow values between functions. Do not describe
+  it as full data-flow analysis.
 
 ## File names and locations
 

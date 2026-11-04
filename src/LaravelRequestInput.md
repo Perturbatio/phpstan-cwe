@@ -127,8 +127,8 @@ CWE-78 ignores must give a reason with at least two words.
 
 - The detector identifies sources in the current expression. It does not
   trace assignments or follow input across functions, branches, or loops.
-  The command and Laravel SQL rules add simple local assignment tracking.
-  The HTML and direct database rules do not follow assigned values.
+  The command, HTML, and Laravel SQL rules add simple local assignment tracking.
+  The direct database rule does not follow assigned values.
 - It does not identify a request object from its variable name alone.
 - It does not inspect request facades or custom input methods.
 - A different function called `request()` is not a request source.

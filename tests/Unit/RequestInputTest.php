@@ -58,3 +58,23 @@ it('accepts only recognised default HTML escape calls', function (
     'dynamic function' => [new Variable('escape'), [new Arg(new Variable('_GET'))], null, 'htmlentities', true],
     'nondefault flags' => [new Name('htmlentities'), [new Arg(new Variable('_GET')), new Arg(new Variable('flags'))], null, 'htmlentities', true],
 ]);
+
+it('checks assigned input without bypassing HTML protections', function (Node $node, bool $hasInput): void {
+    $scope = $this->createStub(Scope::class);
+    $provider = $this->createStub(ReflectionProvider::class);
+    $provider->method('resolveFunctionName')->willReturn('htmlspecialchars');
+
+    expect(RequestInput::inHtml(
+        $node,
+        $scope,
+        $provider,
+        static fn (string $variable): bool => $variable === 'input',
+    ))->toBe($hasInput);
+})->with([
+    'assigned input' => [new Variable('input'), true],
+    'unknown variable' => [new Variable('other'), false],
+    'concatenation' => [new Expr\BinaryOp\Concat(new Variable('other'), new Variable('input')), true],
+    'integer cast' => [new Expr\Cast\Int_(new Variable('input')), false],
+    'float cast' => [new Expr\Cast\Double(new Variable('input')), false],
+    'escape' => [new FuncCall(new Name('htmlspecialchars'), [new Arg(new Variable('input'))]), false],
+]);
