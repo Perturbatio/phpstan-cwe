@@ -31,12 +31,15 @@ jobs:
       uses: actions/cache@v3
       with:
         path: vendor
-        key: ${{ runner.os }}-php-${{ hashFiles('**/composer.lock') }}
+        key: ${{ runner.os }}-php-${{ hashFiles('composer.lock', 'composer-patches.json', 'patches.lock.json', 'patches/**') }}
         restore-keys: |
           ${{ runner.os }}-php-
 
     - name: Install dependencies
       run: composer install --prefer-dist --no-progress
+
+    - name: Apply Composer patches
+      run: composer patches-repatch --no-interaction
 
     - name: Run tests and check coverage
       run: composer test:coverage:check -- --no-tia --parallel
