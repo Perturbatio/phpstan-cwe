@@ -21,9 +21,13 @@ composer test:mutation:check -- --no-tia --parallel --no-cache
 Agents must use `--no-tia` for Pest runs. The mutation command still runs the
 full suite.
 
-Do not pass `--processes` to mutation runs. Pest 5.3.5 passes this option to
-the test subprocess without `--parallel`. The subprocess stops with an
-unknown-option error. Pest then counts that error as a detected mutation.
+You can pass `--processes=16` with `--parallel` when the package's Composer
+patch is applied. The patch removes `--processes=...` from mutation test
+subprocess arguments. Run `composer patches-repatch --no-interaction` if
+the installed dependencies do not have the patch. Without the patch,
+Pest 5.3.5 passes this option to the test subprocess without `--parallel`.
+The subprocess stops with an unknown-option error, which Pest counts as
+a detected mutation. Do not use `--processes` without the patch.
 Use `--no-cache` to check each mutation again.
 The Composer command fails on PHP warnings. A warning from changed code
 must not count as a passing test.
