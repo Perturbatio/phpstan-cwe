@@ -1,4 +1,17 @@
 {
-    "_hash": "6142bfcb78f54dfbf5247ae5e463f25bdb8fff1890806e2e45aa81a59c211653",
-    "patches": []
+    "_hash": "0dc434e0e7bd4c52ae59ab57015e1143bda834da1b5ccbd164444c3fe8b3ba29",
+    "patches": {
+        "pestphp/pest-plugin-mutate": [
+            {
+                "package": "pestphp/pest-plugin-mutate",
+                "description": "pest-plugin-mutate: fix to prevent the --processes option being passed to child processes",
+                "url": "patches/composer/pest-plugin-mutate-child-command-processes-flag.diff",
+                "sha256": "db7d0f76a93c73ab1eabbc9b9944555c19a2cd24cb02537c17edeee2857faa74",
+                "depth": 1,
+                "extra": {
+                    "provenance": "patches-file:composer-patches.json"
+                }
+            }
+        ]
+    }
 }

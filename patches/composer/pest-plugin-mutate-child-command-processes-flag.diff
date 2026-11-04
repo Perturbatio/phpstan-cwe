@@ -1,0 +1,27 @@
+diff --git a/src/MutationTest.php b/src/MutationTest.php
+index 7bf0918..35c80fc 100644
+--- a/src/MutationTest.php
++++ b/src/MutationTest.php
+@@ -84,9 +84,20 @@ class MutationTest
+             $envs['LARAVEL_PARALLEL_TESTING'] = '1';
+         }
+ 
+-        // remove coverage arguments from the original arguments
+-        $filteredArguments = array_filter($originalArguments, fn (string $argument): bool => ! str_starts_with($argument, '--coverage'));
++        // remove coverage and parallel arguments from the original arguments
++        $removeArgs = [
++            '--coverage',
++            '--processes=',
++        ];
++        $filteredArguments = array_filter($originalArguments, function ($arg) use ($removeArgs) {
++            foreach ($removeArgs as $removeArg) {
++                if (str_starts_with($arg, $removeArg)) {
++                    return false;
++                }
++            }
+ 
++            return true;
++        });
+         // TODO: filter arguments to remove unnecessary stuff (Teamcity, Coverage, etc.)
+         $process = new Process(
+             command: [

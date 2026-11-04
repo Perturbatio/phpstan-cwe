@@ -1,4 +1,7 @@
 {
   "patches": {
+    "pestphp/pest-plugin-mutate": {
+      "pest-plugin-mutate: fix to prevent the --processes option being passed to child processes": "patches/composer/pest-plugin-mutate-child-command-processes-flag.diff"
+    }
   }
 }
