@@ -26,15 +26,22 @@
     "require-dev": {
         "pestphp/pest": "5.*",
         "laravel/pint": "^1.32",
-        "spatie/invade": "^2.2"
+        "spatie/invade": "^2.2",
+        "cweagans/composer-patches": "^2.0"
     },
     "config": {
         "allow-plugins": {
-            "pestphp/pest-plugin": true
+            "pestphp/pest-plugin": true,
+            "cweagans/composer-patches": true
         }
     },
     "require": {
         "phpstan/phpstan": "^2.1",
         "php": "^8.3"
+    },
+    "extra": {
+        "composer-patches": {
+            "patches-file": "composer-patches.json"
+        }
     }
 }
