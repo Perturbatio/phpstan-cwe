@@ -3,12 +3,15 @@
 [![PHP Composer](https://github.com/Perturbatio/phpstan-cwe/actions/workflows/php.yml/badge.svg)](https://github.com/Perturbatio/phpstan-cwe/actions/workflows/php.yml)
 
 This package reports potential web application weaknesses during PHPStan
-analysis. The PHP rules check direct request input at HTML and SQL sinks.
+analysis. The PHP rules check request input at HTML and SQL sinks.
 The CWE-78 rule reports command execution calls for review, follows simple
 local assignments, and ranks direct request input by severity and probability.
 Its Laravel variant also checks the `request()` helper and input reads
 from `Illuminate\Http\Request` objects and their subclasses.
-The CWE-79 HTML rule checks the same Laravel request sources. Both rules
+The CWE-79 HTML rule checks the same Laravel request sources. It also follows
+simple local assignments, concatenation, `.=` assignments, interpolation,
+and input passed to text calls. HTML escape calls and numeric casts stop
+this tracking. Both rules
 use one shared source detector, but keep separate escape checks for shell
 arguments and HTML output. Laravel HTML checks are enabled in `config/cwe79.neon`
 and `extension.neon`.
@@ -20,7 +23,8 @@ expressions and `DB::select()`. It follows simple local assignments. It also
 reports dynamic values with an unknown source at a lower probability score.
 
 The Blade rule checks raw output tags in templates. The PHP rules do not
-trace data flow through variables or functions. The Laravel SQL rule reports
+trace values across function calls or merge execution paths. The direct
+database rule does not follow local assignments. The Laravel SQL rule reports
 dynamic values without deciding whether their source is safe. Use other
 security checks and code review with these rules.
 
@@ -212,6 +216,61 @@ An example output is:
 
 The project uses `phpstan.neon.dist` to set level 10 and analyse `src`.
 This project config is not included by the package's rule configuration files.
+
+## Run local checks
+
+Run the local checks from the package root:
+
+```sh
+./check
+```
+
+The script runs `format:check`, `analyse`, `test`, and
+`test:mutation:check`, in that order. It stops at the first failed command
+and returns that command's exit code. Composer's process timeout is disabled.
+Both test commands use `--no-tia --parallel`. The mutation command also uses
+`--no-cache`. Its Composer script requires a 100% score and fails on warnings.
+
+Select checks by name. Put extra test arguments after `--`:
+
+```sh
+./check analyse test
+./check -- --processes=16
+```
+
+Extra arguments go to test commands only. With Pest 5.3.5, use `--processes`
+for mutation tests only after you apply the Pest fix that removes this option
+from mutation subprocess arguments. Without this fix, subprocess option errors
+can count as detected mutations. The default command does not set a worker count.
+
+Use `./check --help` to show the command syntax.
+
+### Local settings
+
+Copy the example file to set local defaults:
+
+```sh
+cp .check.local.example .check.local
+```
+
+Git ignores `.check.local`. The script reads it from the package root when it
+exists. Without this file, the defaults above apply. The file uses Bash syntax
+and is executed by `./check`. Use only a file that you trust.
+
+The example file lists all settings:
+
+| Setting | Default | Purpose |
+|---------|---------|---------|
+| `CHECK_SCRIPTS` | `(format:check analyse test test:mutation:check)` | Script names in execution order. |
+| `CHECK_PARALLEL` | `true` | Add `--parallel` to test commands. |
+| `CHECK_PROCESSES` | Empty | Set a positive worker count. Requires parallel tests. |
+| `CHECK_NO_TIA` | `true` | Add `--no-tia` to test commands. |
+| `CHECK_MUTATION_NO_CACHE` | `true` | Add `--no-cache` to mutation tests. |
+
+Boolean settings accept only `true` or `false`. For example, set
+`CHECK_PROCESSES=16` to use 16 workers with the Pest fix described above.
+Command-line script names replace `CHECK_SCRIPTS`. Arguments after `--`
+are added after the configured test arguments.
 
 ## Run tests
 

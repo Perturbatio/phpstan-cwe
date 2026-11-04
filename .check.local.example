@@ -1,0 +1,19 @@
+# Copy this file to .check.local. Git ignores .check.local.
+# This file uses Bash syntax. The check script executes it.
+# This is useful for local development (e.g. to change the number of parallel processes used)
+
+# Select scripts and their order. Command-line script names replace this list.
+CHECK_SCRIPTS=(format:check analyse test test:mutation:check)
+
+# Run tests in parallel.
+CHECK_PARALLEL=true
+
+# Leave empty for the default worker count. Otherwise, use a positive integer.
+# A worker count requires CHECK_PARALLEL=true.
+CHECK_PROCESSES=
+
+# Disable test impact analysis.
+CHECK_NO_TIA=true
+
+# Check all mutations again.
+CHECK_MUTATION_NO_CACHE=true

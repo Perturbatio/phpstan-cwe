@@ -1,0 +1,126 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+usage() {
+    cat <<'HELP'
+Usage: ./check [script ...] [-- test-argument ...]
+
+Default scripts: format:check analyse test test:mutation:check
+Test defaults: --no-tia --parallel
+Mutation tests also use --no-cache.
+Local defaults: .check.local (see .check.local.example).
+Script names on the command line replace the local script list.
+Arguments after -- go to test scripts only.
+
+Examples:
+  ./check
+  ./check analyse test
+  ./check -- --processes=16
+HELP
+}
+
+scripts=()
+test_arguments=()
+
+while (($#)); do
+    case "$1" in
+        --help|-h)
+            usage
+            exit 0
+            ;;
+        --)
+            shift
+            test_arguments=("$@")
+            break
+            ;;
+        format:check|analyse|test|test:mutation:check)
+            scripts+=("$1")
+            ;;
+        *)
+            printf 'Unknown script or option: %s\n' "$1" >&2
+            usage >&2
+            exit 2
+            ;;
+    esac
+    shift
+done
+
+cd -- "$(dirname -- "${BASH_SOURCE[0]}")"
+
+CHECK_SCRIPTS=(format:check analyse test test:mutation:check)
+CHECK_PARALLEL=true
+CHECK_PROCESSES=
+CHECK_NO_TIA=true
+CHECK_MUTATION_NO_CACHE=true
+
+if [[ -f .check.local ]]; then
+    source ./.check.local
+fi
+
+validate_boolean() {
+    if [[ "$2" != true && "$2" != false ]]; then
+        printf '%s must be true or false.\n' "$1" >&2
+        exit 2
+    fi
+}
+
+validate_boolean CHECK_PARALLEL "$CHECK_PARALLEL"
+validate_boolean CHECK_NO_TIA "$CHECK_NO_TIA"
+validate_boolean CHECK_MUTATION_NO_CACHE "$CHECK_MUTATION_NO_CACHE"
+
+if [[ -n "$CHECK_PROCESSES" ]]; then
+    if [[ ! "$CHECK_PROCESSES" =~ ^[1-9][0-9]*$ || "$CHECK_PARALLEL" != true ]]; then
+        printf 'CHECK_PROCESSES requires a positive integer and CHECK_PARALLEL=true.\n' >&2
+        exit 2
+    fi
+fi
+
+if ((${#scripts[@]} == 0)); then
+    scripts=("${CHECK_SCRIPTS[@]}")
+fi
+
+if ((${#scripts[@]} == 0)); then
+    printf 'Select at least one script with CHECK_SCRIPTS or command-line arguments.\n' >&2
+    exit 2
+fi
+
+for script in "${scripts[@]}"; do
+    case "$script" in
+        format:check|analyse|test|test:mutation:check) ;;
+        *)
+            printf 'Unknown script: %s\n' "$script" >&2
+            exit 2
+            ;;
+    esac
+done
+
+default_test_arguments=()
+if [[ "$CHECK_NO_TIA" == true ]]; then
+    default_test_arguments+=(--no-tia)
+fi
+if [[ "$CHECK_PARALLEL" == true ]]; then
+    default_test_arguments+=(--parallel)
+fi
+if [[ -n "$CHECK_PROCESSES" ]]; then
+    default_test_arguments+=("--processes=$CHECK_PROCESSES")
+fi
+
+for script in "${scripts[@]}"; do
+    printf '\n==> composer %s\n' "$script"
+    case "$script" in
+        test)
+            composer run-script --timeout=0 "$script" -- "${default_test_arguments[@]}" "${test_arguments[@]}"
+            ;;
+        test:mutation:check)
+            mutation_arguments=()
+            if [[ "$CHECK_MUTATION_NO_CACHE" == true ]]; then
+                mutation_arguments+=(--no-cache)
+            fi
+            composer run-script --timeout=0 "$script" -- "${default_test_arguments[@]}" "${mutation_arguments[@]}" "${test_arguments[@]}"
+            ;;
+        *)
+            composer run-script --timeout=0 "$script"
+            ;;
+    esac
+done
