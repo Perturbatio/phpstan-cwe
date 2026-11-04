@@ -8,9 +8,16 @@ use PhpParser\Node\Expr;
 use PhpParser\Node\Scalar\String_;
 use PHPStan\Analyser\Scope;
 use PHPStan\Reflection\ReflectionProvider;
+use PHPStan\Testing\PHPStanTestCase;
 use PHPStan\Type\MixedType;
 
 covers(Cwe79Collector::class);
+
+class Cwe79CollectorTestCase extends PHPStanTestCase
+{
+}
+
+uses(Cwe79CollectorTestCase::class);
 
 beforeEach(function (): void {
     $provider = $this->createStub(ReflectionProvider::class);
@@ -46,9 +53,49 @@ it('does not track unsupported assignment targets or other statements', function
     expect($this->collector->processNode($node, $this->scope))->toBeNull();
 })->with([
     'property' => [new Expr\Assign(new Expr\PropertyFetch(new Expr\Variable('object'), 'name'), new Expr\Variable('_GET'))],
+    'array item' => [new Expr\Assign(new Expr\ArrayDimFetch(new Expr\Variable('values'), new String_('name')), new Expr\Variable('_GET'))],
     'variable variable' => [new Expr\Assign(new Expr\Variable(new Expr\Variable('name')), new Expr\Variable('_GET'))],
     'return' => [new Node\Stmt\Return_(new Expr\Variable('_GET'))],
 ]);
+
+it('keeps the class name before the function name in the scope key', function (): void {
+    $class = $this->getContainer()->getByType(ReflectionProvider::class)->getClass(stdClass::class);
+    $this->scope->method('getClassReflection')->willReturn($class);
+    $this->scope->method('getFunctionName')->willReturn('render');
+
+    $event = $this->collector->processNode(
+        new Expr\Assign(new Expr\Variable('html'), new String_('fixed')),
+        $this->scope,
+    );
+
+    expect($event['scope'])->toBe('stdClass::render');
+});
+
+it('returns assignment dependencies as a list after removing repeated names', function (): void {
+    $expression = new Expr\BinaryOp\Concat(
+        new Expr\BinaryOp\Concat(new Expr\Variable('first'), new Expr\Variable('first')),
+        new Expr\Variable('second'),
+    );
+    $event = $this->collector->processNode(
+        new Expr\Assign(new Expr\Variable('html'), $expression),
+        $this->scope,
+    );
+
+    expect($event['variables'])->toBe(['first', 'second']);
+});
+
+it('returns output dependencies once as a list across echo expressions', function (): void {
+    $event = $this->collector->processNode(
+        new Node\Stmt\Echo_([
+            new Expr\Variable('first'),
+            new Expr\Variable('first'),
+            new Expr\Variable('second'),
+        ]),
+        $this->scope,
+    );
+
+    expect($event['variables'])->toBe(['first', 'second']);
+});
 
 it('keeps direct closure checks but does not use or change outer variable facts', function (): void {
     $this->scope->method('isInAnonymousFunction')->willReturn(true);
