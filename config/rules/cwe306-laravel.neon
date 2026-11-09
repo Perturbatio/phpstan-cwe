@@ -1,0 +1,18 @@
+services:
+    -
+        class: Perturbatio\PhpstanCwe\Blade\AnalysedFileCollector
+        tags:
+            - phpstan.collector
+    -
+        class: Perturbatio\PhpstanCwe\Rules\Cwe306\LaravelAuthenticationScanner
+        arguments:
+            criticalOperations: %phpstanCwe.cwe306CriticalOperations%
+            middlewareAliases: %phpstanCwe.cwe306MiddlewareAliases%
+            globalMiddleware: %phpstanCwe.cwe306GlobalMiddleware%
+    -
+        class: Perturbatio\PhpstanCwe\Rules\Cwe306\Cwe306LaravelRule
+        arguments:
+            parser: @currentPhpVersionSimpleDirectParser
+            minProbability: %phpstanCwe.minProbability%
+        tags:
+            - phpstan.rules.rule

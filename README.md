@@ -47,10 +47,10 @@ includes:
     - vendor/perturbatio/phpstan-cwe/extension.neon
 ```
 
-The default file enables all the rules. To use one rule,
+The default file enables the rules except the opt-in CWE-306 rule. To use one rule,
 include the specific rule, e.g. `config/cwe78.neon`, `config/cwe78-laravel.neon`,
 `config/cwe79.neon`, `config/cwe79-blade.neon`, `config/cwe89.neon`, or
-`config/cwe89-laravel.neon` instead of
+`config/cwe89-laravel.neon`, or `config/cwe306-laravel.neon` instead of
 `extension.neon`.
 
 For example, to enable only the PHP HTML rule:
@@ -120,6 +120,111 @@ To ignore one Blade raw echo, put a Blade comment immediately before it:
 An ignore with no matching raw echo gets a report. See the
 [Blade rule document](src/Rules/Cwe79/Cwe79BladeRule.md) for the exact placement.
 
+## Laravel authentication checks (opt-in)
+
+The experimental [CWE-306 Laravel rule](src/Rules/Cwe306/Cwe306LaravelRule.md)
+checks routes that reach functions or methods which you configure as requiring
+authentication. It checks supported middleware, controller calls, and custom
+form request authorization. Unknown controls lower confidence; they do not
+prove that authentication is absent.
+
+Enable it with `config/cwe306-laravel.neon` and set
+`phpstanCwe.cwe306CriticalOperations`. The default list is empty.
+This rule is not enabled by `extension.neon`. To add it to the full extension,
+also include `config/rules/cwe306-laravel.neon`. See the rule document for
+middleware configuration, supported syntax, and known limits.
+
+### Example project configuration
+
+For example, require authentication before a caller deletes a user or calls an
+account deletion action. Add this to your project's `phpstan.neon`:
+
+```neon
+includes:
+    - vendor/perturbatio/phpstan-cwe/extension.neon
+    - vendor/perturbatio/phpstan-cwe/config/rules/cwe306-laravel.neon
+
+parameters:
+    paths:
+        - app
+        - routes
+    phpstanCwe:
+        cwe306CriticalOperations:
+            - App\Models\User::delete
+            - App\Actions\DeleteAccount::__invoke
+        minProbability: 80
+```
+
+Analyse the route, controller, model, action, and form request files together.
+The minimum score applies to all enabled CWE rules. This example leaves global
+middleware unknown. Set `cwe306GlobalMiddleware: []` only after you confirm that
+no global middleware requires authentication.
+
+The rule reports these routes because they reach a configured operation without
+a supported authentication check:
+
+```php
+use App\Actions\DeleteAccount;
+use App\Models\User;
+use Illuminate\Support\Facades\Route;
+
+Route::delete('/users/{user}', function (User $user): void {
+    $user->delete();
+});
+
+Route::post('/accounts/delete', function (DeleteAccount $action): void {
+    $action->__invoke();
+});
+```
+
+`User::delete` identifies calls on a typed `User` receiver, including an inherited
+Eloquent `delete()` method. It does not identify every Eloquent deletion. Calls
+such as `User::find($id)->delete()` and `User::where(...)->delete()` use receivers
+that this rule does not resolve.
+
+The action example uses an explicit `__invoke()` call. The rule does not resolve
+`$action()` or container calls such as `app(DeleteAccount::class)()`. For a service,
+configure its full method name, such as
+`App\Services\AccountService::deleteAccount`, and call that method on a typed
+service parameter.
+
+To require authentication for both routes, put them in an authenticated group:
+
+```php
+Route::middleware('auth:sanctum')->group(function () {
+    Route::delete('/users/{user}', function (User $user): void {
+        $user->delete();
+    });
+
+    Route::post('/accounts/delete', function (DeleteAccount $action): void {
+        $action->__invoke();
+    });
+});
+```
+
+CWE-306 checks **authentication**, not permission to delete a specific record.
+Keep the policy or other authorization check that your application requires.
+Route model binding alone does not authenticate the caller.
+
+Run the analysis from your project directory:
+
+```sh
+vendor/bin/phpstan analyse --configuration=phpstan.neon
+```
+
+The identifier is `phpstanCwe.cwe306`. An inline ignore must give a reason
+with at least two words:
+
+```php
+// @phpstan-ignore phpstanCwe.cwe306 (External gateway authenticates callers)
+Route::post('/accounts/delete', [AccountController::class, 'destroy']);
+```
+
+A missing or short reason produces a non-ignorable
+`phpstanCwe.ignoreReason` error.
+
+
+
 ## Set a minimum probability score
 
 The default minimum is `0`. Set a value from `0` to `100` in `phpstan.neon`:
@@ -130,16 +235,17 @@ parameters:
         minProbability: 80
 ```
 
-Each rule has a probability score of `80`. Setting a minimum higher than
-this stops all rules from reporting. This score is an estimate of detection
-confidence. It is not a measured probability of an attack. Severity is
-separate: each initial rule reports **high** severity because the possible
-harm is high.
+Scores differ by rule. The CWE-306 score depends on the available evidence.
+A finding at the minimum score is kept. A finding below the minimum is
+filtered. The score is an estimate of detection confidence, not a measured
+probability of an attack. Severity is separate and describes possible harm.
+See the rule documents for scores and severity.
 
 Each report gives a CWE number, a reason, a severity, a probability score,
 and a link to the MITRE CWE site. Reports are ignorable PHPStan errors.
-The stable identifiers are `phpstanCwe.cwe78`, `phpstanCwe.cwe79`, and
-`phpstanCwe.cwe89`. Both CWE-89 rules use `phpstanCwe.cwe89`. CWE-78 ignore
+The stable identifiers are `phpstanCwe.cwe78`, `phpstanCwe.cwe79`,
+`phpstanCwe.cwe89`, and `phpstanCwe.cwe306`.
+Both CWE-89 rules use `phpstanCwe.cwe89`. CWE-78 and CWE-306 inline ignore
 comments must include a reason with at least two words. A short reason is
 reported with `phpstanCwe.ignoreReason`.
 The same data is in the PHPStan error metadata.

@@ -61,6 +61,47 @@ function analyseWithConfig(string $config, string $fixture = 'tests/fixtures/sha
     return $result;
 }
 
+it('loads the opt-in Laravel authentication rule with each package configuration', function (string $config): void {
+    $result = analyseWithConfig($config, 'tests/fixtures/CWE-306/laravel.php');
+    $messages = array_values($result['files'])[0]['messages'];
+
+    expect($result['totals']['file_errors'])->toBe(1)
+        ->and($messages[0]['identifier'])->toBe('phpstanCwe.cwe306')
+        ->and($messages[0]['line'])->toBe(27)
+        ->and($messages[0]['ignorable'])->toBeTrue()
+        ->and($messages[0]['message'])->toContain(
+            'critical operation eraseAccounts',
+            'Severity: high.',
+            'Probability: 100%.',
+            'https://cwe.mitre.org/data/definitions/306.html',
+        );
+})->with(['tests/fixtures/CWE-306/laravel.neon', 'tests/fixtures/CWE-306/extension.neon']);
+
+it('reports a critical DELETE controller action without authentication middleware', function (string $config): void {
+    $result = analyseWithConfig($config, 'tests/fixtures/CWE-306/controller.php');
+    $file = dirname(__DIR__, 2) . '/tests/fixtures/CWE-306/controller.php';
+
+    expect(array_keys($result['files']))->toBe([$file])
+        ->and($result['totals']['file_errors'])->toBe(1)
+        ->and($result['files'][$file]['messages'])->toHaveCount(1)
+        ->and($result['files'][$file]['messages'][0])->toMatchArray([
+            'message' => 'CWE-306: A Laravel route reaches critical operation App\Http\Controllers\UserController::delete without a supported authentication control. Severity: high. Probability: 100%. https://cwe.mitre.org/data/definitions/306.html',
+            'line' => 37,
+            'ignorable' => true,
+            'identifier' => 'phpstanCwe.cwe306',
+        ]);
+})->with(['tests/fixtures/CWE-306/laravel.neon', 'tests/fixtures/CWE-306/extension.neon']);
+
+it('requires a reason with more than one word for Laravel authentication ignores', function (): void {
+    $result = analyseWithConfig('tests/fixtures/CWE-306/laravel.neon', 'tests/fixtures/CWE-306/ignore.php');
+    $messages = array_values($result['files'])[0]['messages'];
+
+    expect($result['totals']['file_errors'])->toBe(2)
+        ->and(array_column($messages, 'identifier'))->toBe(['phpstanCwe.ignoreReason', 'phpstanCwe.ignoreReason'])
+        ->and(array_column($messages, 'message'))->toBe(array_fill(0, 2, 'CWE-306 ignore requires a reason with at least two words.'))
+        ->and(array_column($messages, 'ignorable'))->toBe([false, false]);
+});
+
 it('loads both rules with identifiers and MITRE links', function (): void {
     $result = analyseWithConfig('extension.neon');
     $messages = array_values($result['files'])[0]['messages'];

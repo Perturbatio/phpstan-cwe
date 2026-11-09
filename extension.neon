@@ -6,3 +6,4 @@ includes:
     - config/rules/cwe89-laravel.neon
     # This file also includes config/rules/cwe78.neon.
     - config/rules/cwe78-laravel.neon
+    - config/rules/cwe306-laravel.neon

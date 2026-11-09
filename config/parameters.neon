@@ -6,6 +6,12 @@ parameters:
     phpstanCwe:
         # Report findings with a probability score at or above this value (0-100)
         minProbability: 0
+        # CWE-306 is opt-in. List functions or Class::method names that require authentication.
+        cwe306CriticalOperations: []
+        # Map middleware aliases to their full class names.
+        cwe306MiddlewareAliases: []
+        # Null means unknown. Set the effective global middleware list to confirm it.
+        cwe306GlobalMiddleware: null
         # Scan these directories and their child directories for Blade templates
         # Relative paths start at the current working directory
         # The default directory is skipped if absent. An absent custom path is an error
@@ -15,4 +21,4 @@ parameters:
 
 # Define the accepted parameter names and types for PHPStan configuration checks
 parametersSchema:
-    phpstanCwe: structure([minProbability: int(), bladeDirectories: listOf(string())])
+    phpstanCwe: structure([minProbability: int(), bladeDirectories: listOf(string()), cwe306CriticalOperations: listOf(string()), cwe306MiddlewareAliases: arrayOf(string(), string()), cwe306GlobalMiddleware: schema(listOf(string()), nullable())])

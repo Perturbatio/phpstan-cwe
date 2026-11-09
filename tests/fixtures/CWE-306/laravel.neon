@@ -1,0 +1,9 @@
+includes:
+    - ../../../config/cwe306-laravel.neon
+
+parameters:
+    phpstanCwe:
+        cwe306CriticalOperations:
+            - eraseAccounts
+            - App\Http\Controllers\UserController::delete
+        cwe306GlobalMiddleware: []
