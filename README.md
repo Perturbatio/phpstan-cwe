@@ -2,6 +2,14 @@
 
 [![PHP Composer](https://github.com/Perturbatio/phpstan-cwe/actions/workflows/php.yml/badge.svg)](https://github.com/Perturbatio/phpstan-cwe/actions/workflows/php.yml)
 
+PHPStan CWE is a PHPStan extension that finds *possible* security weaknesses in PHP code. It reports the severity, confidence score, and related CWE reference for each finding. It also checks Laravel routes for critical operations that may lack authentication.
+
+The package will work for any PHP project that uses PHPStan 2.x. It has been tested with Laravel 10.x and 11.x, but it does not require Laravel.
+
+However, there are some Laravel only rule implementations.
+
+---
+
 This package reports potential web application weaknesses during PHPStan
 analysis. 
 
@@ -38,10 +46,11 @@ security checks and code review with these rules.
 > This package cannot cater for all possible ways a CWE can be exploited,
 > but it does provide some useful checks.
 
-## Install
+## Installation
 
 Install the package with Composer:
 
+[//]: # (TODO: Add a version constraint when the first release is tagged.)
 ```sh
 composer require --dev perturbatio/phpstan-cwe
 ```

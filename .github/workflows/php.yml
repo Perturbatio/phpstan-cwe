@@ -42,7 +42,7 @@ jobs:
       run: composer patches-repatch --no-interaction
 
     - name: Run tests and check coverage
-      run: composer test:coverage:check -- --no-tia --parallel
+      run: composer test:coverage:check -- --no-tia --parallel --processes=2
 
     - name: Check mutation score
-      run: composer test:mutation:check -- --no-tia --parallel
+      run: composer test:mutation:check -- --no-tia --parallel --processes=2
