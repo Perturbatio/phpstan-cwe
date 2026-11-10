@@ -1,0 +1,7 @@
+includes:
+    - ../../../extension.neon
+
+parameters:
+    phpstanCwe:
+        cwe306CriticalOperations:
+            - eraseAccounts

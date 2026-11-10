@@ -61,7 +61,7 @@ function analyseWithConfig(string $config, string $fixture = 'tests/fixtures/sha
     return $result;
 }
 
-it('loads the opt-in Laravel authentication rule with each package configuration', function (string $config): void {
+it('loads the Laravel authentication rule with each package configuration', function (string $config): void {
     $result = analyseWithConfig($config, 'tests/fixtures/CWE-306/laravel.php');
     $messages = array_values($result['files'])[0]['messages'];
 
@@ -76,6 +76,16 @@ it('loads the opt-in Laravel authentication rule with each package configuration
             'https://cwe.mitre.org/data/definitions/306.html',
         );
 })->with(['tests/fixtures/CWE-306/laravel.neon', 'tests/fixtures/CWE-306/extension.neon']);
+
+it('reports the default empty CWE-306 configuration through PHPStan', function (string $config): void {
+    $result = analyseWithConfig($config, 'tests/fixtures/CWE-306/laravel.php');
+    $messages = array_merge(...array_column(array_values($result['files']), 'messages'));
+
+    expect($result['totals']['file_errors'])->toBe(1)
+        ->and($messages)->toHaveCount(1)
+        ->and($messages[0]['identifier'])->toBe('phpstanCwe.cwe306Configuration')
+        ->and($messages[0]['message'])->toBe('CWE-306 is enabled, but no critical operations are configured. Set phpstanCwe.cwe306CriticalOperations to the functions or methods that require authentication.');
+})->with(['config/cwe306-laravel.neon', 'extension.neon']);
 
 it('reports a critical DELETE controller action without authentication middleware', function (string $config): void {
     $result = analyseWithConfig($config, 'tests/fixtures/CWE-306/controller.php');
@@ -103,7 +113,7 @@ it('requires a reason with more than one word for Laravel authentication ignores
 });
 
 it('loads both rules with identifiers and MITRE links', function (): void {
-    $result = analyseWithConfig('extension.neon');
+    $result = analyseWithConfig('tests/fixtures/shared/extension.neon');
     $messages = array_values($result['files'])[0]['messages'];
 
     expect($result['totals']['file_errors'])->toBe(2)
@@ -150,7 +160,7 @@ it('checks Laravel request input at HTML output with both package configurations
         ->and(array_column($messages, 'identifier'))->toBe(array_fill(0, count($expectedLines), 'phpstanCwe.cwe79'))
         ->and(array_column($messages, 'message'))->toBe(array_fill(0, count($expectedLines), $expectedMessage))
         ->and(array_column($messages, 'ignorable'))->toBe(array_fill(0, count($expectedLines), true));
-})->with(['config/cwe79.neon', 'extension.neon']);
+})->with(['config/cwe79.neon', 'tests/fixtures/shared/extension.neon']);
 
 it('tracks assigned HTML input with both package configurations', function (string $config): void {
     $result = analyseWithConfig($config, 'tests/fixtures/CWE-79/assignments.php');
@@ -167,7 +177,7 @@ it('tracks assigned HTML input with both package configurations', function (stri
             'https://cwe.mitre.org/data/definitions/79.html',
         );
     }
-})->with(['config/cwe79.neon', 'extension.neon']);
+})->with(['config/cwe79.neon', 'tests/fixtures/shared/extension.neon']);
 
 it('reports command sinks with context-based ratings and source lines', function (): void {
     $result = analyseWithConfig('config/cwe78.neon', 'tests/fixtures/CWE-78/cwe78.php');
@@ -245,7 +255,7 @@ it('loads Laravel request command checks without duplicate reports', function (s
                 'https://cwe.mitre.org/data/definitions/78.html',
             );
     }
-})->with(['config/cwe78-laravel.neon', 'extension.neon']);
+})->with(['config/cwe78-laravel.neon', 'tests/fixtures/shared/extension.neon']);
 
 it('keeps the base command configuration independent of Laravel request sources', function (): void {
     $result = analyseWithConfig('config/cwe78.neon', 'tests/fixtures/CWE-78/laravel.php');
@@ -333,7 +343,7 @@ it('uses shared Laravel sources for raw SQL and direct database queries', functi
                 'https://cwe.mitre.org/data/definitions/89.html',
             );
     }
-})->with(['config/cwe89-laravel.neon', 'config/cwe89.neon', 'extension.neon']);
+})->with(['config/cwe89-laravel.neon', 'config/cwe89.neon', 'tests/fixtures/shared/extension.neon']);
 
 it('filters reports below the minimum probability', function (): void {
     $result = analyseWithConfig('tests/fixtures/shared/filtered.neon');

@@ -12,6 +12,26 @@ use PHPStan\Parser\Parser;
 
 covers(Cwe306LaravelRule::class, LaravelAuthenticationScanner::class);
 
+it('reports an empty critical operation list once regardless of files or probability', function (int $minimum, bool $hasFiles): void {
+    $parser = $this->createMock(Parser::class);
+    $parser->expects($this->never())->method('parseFile');
+    $rule = new Cwe306LaravelRule($parser, new LaravelAuthenticationScanner(), $minimum);
+    $files = $hasFiles ? [
+        __DIR__ . '/../fixtures/CWE-306/laravel.php' => [AnalysedFileCollector::class => [true]],
+        __DIR__ . '/../fixtures/CWE-306/controller.php' => [AnalysedFileCollector::class => [true]],
+    ] : [];
+    $reports = $rule->processNode(new CollectedDataNode($files, false), $this->createStub(Scope::class));
+
+    expect($reports)->toHaveCount(1)
+        ->and($reports[0]->getIdentifier())->toBe('phpstanCwe.cwe306Configuration')
+        ->and($reports[0]->getMessage())->toBe('CWE-306 is enabled, but no critical operations are configured. Set phpstanCwe.cwe306CriticalOperations to the functions or methods that require authentication.');
+})->with([[0, false], [0, true], [100, false], [100, true]]);
+
+it('does not report a configuration problem when an operation is configured', function (): void {
+    $rule = new Cwe306LaravelRule($this->createStub(Parser::class), new LaravelAuthenticationScanner(['eraseAccounts']), 100);
+    expect($rule->processNode(new CollectedDataNode([], false), $this->createStub(Scope::class)))->toBe([]);
+});
+
 it('makes ignorable CWE-306 reports and applies the probability minimum', function (int $minimum, int $count): void {
     $nodes = (new ParserFactory())->createForNewestSupportedVersion()->parse(
         "<?php\nuse Illuminate\Support\Facades\Route;\nRoute::post('/erase', function () { eraseAccounts(); });",

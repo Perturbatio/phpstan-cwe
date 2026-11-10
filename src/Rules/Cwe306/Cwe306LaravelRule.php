@@ -12,6 +12,7 @@ use PHPStan\Analyser\Scope;
 use PHPStan\Node\CollectedDataNode;
 use PHPStan\Parser\Parser;
 use PHPStan\Rules\Rule;
+use PHPStan\Rules\RuleErrorBuilder;
 
 /** @implements Rule<CollectedDataNode> */
 final class Cwe306LaravelRule implements Rule
@@ -31,6 +32,13 @@ final class Cwe306LaravelRule implements Rule
 
     public function processNode(Node $node, Scope $scope): array
     {
+        if (!$this->scanner->hasCriticalOperations()) {
+            return [
+                RuleErrorBuilder::message('CWE-306 is enabled, but no critical operations are configured. Set phpstanCwe.cwe306CriticalOperations to the functions or methods that require authentication.')
+                    ->identifier('phpstanCwe.cwe306Configuration')
+                    ->build(),
+            ];
+        }
         $files = [];
         $reports = [];
         // Collect all analysed files before scanning. A route and its controller

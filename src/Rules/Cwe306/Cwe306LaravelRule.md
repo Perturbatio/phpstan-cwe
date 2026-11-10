@@ -1,6 +1,6 @@
 # CWE-306: Missing authentication for critical function in Laravel
 
-This opt-in rule checks Laravel HTTP routes that call a configured critical
+This rule checks Laravel HTTP routes that call a configured critical
 function or method. A critical operation is an operation that your application
 requires a caller to authenticate before it runs. The rule does not assume that
 all database writes or all POST routes require authentication.
@@ -8,6 +8,9 @@ all database writes or all POST routes require authentication.
 The rule uses PHP syntax trees. It does not start the application or run Artisan.
 Laravel is not a package dependency. The supported syntax includes route closures,
 arrow functions, controller actions, and invokable controllers.
+
+See the [future plans](Cwe306LaravelRule.future-plans.md) for proposed Eloquent
+delete detection. These planned checks are not yet available.
 
 ## Configuration
 
@@ -30,9 +33,14 @@ The critical operation list is empty by default. Names are full function names
 or `Class::method` names. Name comparison is not case-sensitive. Do not list a
 valid public operation, such as a contact form submission.
 
-To add this rule to the full extension, include `extension.neon` and
-`config/rules/cwe306-laravel.neon`. Do not also include the public configuration:
-PHPStan rejects duplicate includes of the shared parameter file.
+If the list is empty, the rule reports one configuration error per analysis:
+`phpstanCwe.cwe306Configuration`. It does not scan for critical operations until
+you configure at least one operation. This error is not a vulnerability finding.
+The `minProbability` setting does not filter it.
+
+The full extension already enables this rule. Include only `extension.neon`
+when you use all rules. Do not also include the individual configuration or
+the rule service file: PHPStan rejects duplicate includes.
 
 PHPStan must analyse the route files, controller files, form request files, and
 service files together. Bodies in files outside the analysis are unknown.
@@ -149,7 +157,7 @@ enforce. Use the form above to record a reason.
 
 ## Known limits
 
-- This is a first, opt-in implementation. It does not cover plain PHP scripts.
+- This is a first implementation. It does not cover plain PHP scripts.
 - It does not expand resource routes, route macros, route files loaded by
   `require`, controller groups, dynamic route handlers, or route cache files.
 - It does not resolve Laravel's static `HasMiddleware` declarations, custom

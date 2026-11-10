@@ -1,6 +1,5 @@
 includes:
     - ../../../extension.neon
-    - ../../../config/rules/cwe306-laravel.neon
 
 parameters:
     phpstanCwe:

@@ -55,6 +55,11 @@ final class LaravelAuthenticationScanner
         }
     }
 
+    public function hasCriticalOperations(): bool
+    {
+        return $this->criticalOperations !== [];
+    }
+
     /**
      * @param array<string, array<Stmt>> $files
      * @return list<Finding>

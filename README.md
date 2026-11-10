@@ -3,24 +3,30 @@
 [![PHP Composer](https://github.com/Perturbatio/phpstan-cwe/actions/workflows/php.yml/badge.svg)](https://github.com/Perturbatio/phpstan-cwe/actions/workflows/php.yml)
 
 This package reports potential web application weaknesses during PHPStan
-analysis. The PHP rules check request input at HTML and SQL sinks.
-The CWE-78 rule reports command execution calls for review, follows simple
-local assignments, and ranks direct request input by severity and probability.
-Its Laravel variant also checks the `request()` helper and input reads
-from `Illuminate\Http\Request` objects and their subclasses.
-The CWE-79 HTML rule checks the same Laravel request sources. It also follows
-simple local assignments, concatenation, `.=` assignments, interpolation,
-and input passed to text calls. HTML escape calls and numeric casts stop
-this tracking. Both rules
+analysis. 
+
+The PHP rules check request input at HTML and SQL sinks.
+
+The CWE-78 rule reports command execution calls for review, follows simple local assignments, and ranks direct request input by severity and probability.
+
+Its Laravel variant also checks the `request()` helper and input reads from `Illuminate\Http\Request` objects and their subclasses.
+
+The CWE-79 HTML rule checks the same Laravel request sources. It also follows simple local assignments, concatenation, `.=` assignments, interpolation, and input passed to text calls. HTML escape calls and numeric casts stop this tracking. 
+
+Both rules
 use one shared source detector, but keep separate escape checks for shell
-arguments and HTML output. Laravel HTML checks are enabled in `config/cwe79.neon`
+arguments and HTML output. 
+
+Laravel HTML checks are enabled in `config/cwe79.neon`
 and `extension.neon`.
+
 Both CWE-89 rules also use this shared detector for Laravel request sources.
+
 They keep their SQL-specific checks for query text and bound values.
 
-The Laravel SQL rule checks dynamic values in raw Eloquent and Query Builder
-expressions and `DB::select()`. It follows simple local assignments. It also
-reports dynamic values with an unknown source at a lower probability score.
+The Laravel SQL rule checks dynamic values in raw Eloquent and Query Builder expressions and `DB::select()`. It follows simple local assignments. 
+
+It also reports dynamic values with an unknown source at a lower probability score.
 
 The Blade rule checks raw output tags in templates. The PHP rules do not
 trace values across function calls or merge execution paths. The direct
@@ -47,7 +53,8 @@ includes:
     - vendor/perturbatio/phpstan-cwe/extension.neon
 ```
 
-The default file enables the rules except the opt-in CWE-306 rule. To use one rule,
+The default file enables all rules. Configure critical operations for CWE-306
+as shown below. To use one rule,
 include the specific rule, e.g. `config/cwe78.neon`, `config/cwe78-laravel.neon`,
 `config/cwe79.neon`, `config/cwe79-blade.neon`, `config/cwe89.neon`, or
 `config/cwe89-laravel.neon`, or `config/cwe306-laravel.neon` instead of
@@ -120,7 +127,7 @@ To ignore one Blade raw echo, put a Blade comment immediately before it:
 An ignore with no matching raw echo gets a report. See the
 [Blade rule document](src/Rules/Cwe79/Cwe79BladeRule.md) for the exact placement.
 
-## Laravel authentication checks (opt-in)
+## Laravel authentication checks
 
 The experimental [CWE-306 Laravel rule](src/Rules/Cwe306/Cwe306LaravelRule.md)
 checks routes that reach functions or methods which you configure as requiring
@@ -128,10 +135,13 @@ authentication. It checks supported middleware, controller calls, and custom
 form request authorization. Unknown controls lower confidence; they do not
 prove that authentication is absent.
 
-Enable it with `config/cwe306-laravel.neon` and set
+The full extension enables this rule. To use it alone, include
+`config/cwe306-laravel.neon`. Set
 `phpstanCwe.cwe306CriticalOperations`. The default list is empty.
-This rule is not enabled by `extension.neon`. To add it to the full extension,
-also include `config/rules/cwe306-laravel.neon`. See the rule document for
+If the rule is enabled with an empty list, it reports one configuration error
+with identifier `phpstanCwe.cwe306Configuration`. This error is not a vulnerability
+finding and is not filtered by `minProbability`.
+Do not include the rule again when you use `extension.neon`. See the rule document for
 middleware configuration, supported syntax, and known limits.
 
 ### Example project configuration
@@ -142,7 +152,6 @@ account deletion action. Add this to your project's `phpstan.neon`:
 ```neon
 includes:
     - vendor/perturbatio/phpstan-cwe/extension.neon
-    - vendor/perturbatio/phpstan-cwe/config/rules/cwe306-laravel.neon
 
 parameters:
     paths:
