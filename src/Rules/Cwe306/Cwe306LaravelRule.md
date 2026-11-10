@@ -64,6 +64,13 @@ The `auth` alias means Laravel's `Illuminate\Auth\Middleware\Authenticate`
 unless your alias configuration replaces it. Guard names, such as `auth:sanctum`,
 are supported.
 
+> [!WARNING]
+> Map each alias to its actual middleware class. This setting does not declare
+> that a custom class requires authentication. The rule currently recognises
+> only `Illuminate\Auth\Middleware\Authenticate`; custom classes and subclasses
+> remain unknown. Do not map a custom or Filament alias to Laravel's class only
+> to stop a finding. An incorrect mapping can hide missing authentication.
+
 ## Examples
 
 Unsafe route:
@@ -155,7 +162,7 @@ This check applies to identifier-specific inline ignores. PHPStan's global
 suppression mechanisms. They do not have a reason field that this rule can
 enforce. Use the form above to record a reason.
 
-## Known limits
+## Known limitations
 
 - This is a first implementation. It does not cover plain PHP scripts.
 - It does not expand resource routes, route macros, route files loaded by

@@ -161,13 +161,18 @@ parameters:
         cwe306CriticalOperations:
             - App\Models\User::delete
             - App\Actions\DeleteAccount::__invoke
-        minProbability: 80
+        minProbability: 0
 ```
 
 Analyse the route, controller, model, action, and form request files together.
 The minimum score applies to all enabled CWE rules. This example leaves global
 middleware unknown. Set `cwe306GlobalMiddleware: []` only after you confirm that
 no global middleware requires authentication.
+
+> [!WARNING]
+> The rule does not read Laravel's effective global middleware configuration.
+> Leave `cwe306GlobalMiddleware` unknown unless you have checked that
+> configuration. An incorrect empty list can overstate confidence in a finding.
 
 The rule reports these routes because they reach a configured operation without
 a supported authentication check:
@@ -211,9 +216,10 @@ Route::middleware('auth:sanctum')->group(function () {
 });
 ```
 
-CWE-306 checks **authentication**, not permission to delete a specific record.
-Keep the policy or other authorization check that your application requires.
-Route model binding alone does not authenticate the caller.
+> [!WARNING]
+> CWE-306 checks **authentication**, not permission to delete a specific record.
+> Keep the policy or other authorization check that your application requires.
+> Route model binding alone does not authenticate the caller.
 
 Run the analysis from your project directory:
 
@@ -232,7 +238,33 @@ Route::post('/accounts/delete', [AccountController::class, 'destroy']);
 A missing or short reason produces a non-ignorable
 `phpstanCwe.ignoreReason` error.
 
+> [!WARNING]
+> The reason check applies only to identifier-specific inline ignore annotations. 
+> Baselines, global `ignoreErrors`, and identifier-free line ignores can suppress 
+> findings without a reason. Review these settings separately.
 
+### Important detection limitations
+
+> [!WARNING]
+> **Route coverage is incomplete.** The rule does not expand resource routes,
+> route macros, controller groups, or dynamic route handlers. Adding `routes/`
+> to the analysed paths does not mean that every Laravel route is checked.
+> Review unsupported routes separately.
+
+> [!WARNING]
+> **Validation does not prove authentication.** `web`, `api`, CSRF checks, and
+> form request validation do not establish that the caller is authenticated.
+> 
+> e.g. A form request that returns `true` from `authorize()` does not add an
+> authentication control.
+
+> [!WARNING]
+> **A redirect does not stop execution.** A supported authentication check must
+> stop the guest path before the critical operation. An ignored Boolean check
+> or a check after the operation does not protect it.
+
+See the [full rule limits](src/Rules/Cwe306/Cwe306LaravelRule.md#known-limitations)
+for unsupported calls and execution paths.
 
 ## Set a minimum probability score
 
@@ -250,6 +282,13 @@ filtered. The score is an estimate of detection confidence, not a measured
 probability of an attack. Severity is separate and describes possible harm.
 See the rule documents for scores and severity.
 
+> [!WARNING]
+> Use `minProbability: 0` during initial setup. A higher minimum can hide real
+> findings when the rule cannot resolve middleware or calls.
+>
+> For CWE-306, unknown global middleware can limit a finding to 60%, and unresolved 
+> calls can reduce it further. A low score does not mean that an operation is safe.
+
 Each report gives a CWE number, a reason, a severity, a probability score,
 and a link to the MITRE CWE site. Reports are ignorable PHPStan errors.
 The stable identifiers are `phpstanCwe.cwe78`, `phpstanCwe.cwe79`,
@@ -264,6 +303,105 @@ Read [CWE-78](src/Rules/Cwe78/Cwe78Rule.md), [CWE-79](src/Rules/Cwe79/Cwe79Rule.
 [CWE-89](src/Rules/Cwe89/Cwe89Rule.md) and
 [CWE-89 in Laravel query builders](src/Rules/Cwe89/Cwe89LaravelRule.md) for
 examples and limitations.
+
+## FAQ
+
+### How do I fix an error?
+
+Example error:
+
+```text
+CWE-89: Unprotected dynamic value in raw SQL expression. Severity: high. Probability: 80%. https://cwe.mitre.org/data/definitions/89.html
+```
+Example code that causes the error:
+```PHP
+DB::select("SELECT * FROM users WHERE username = '$user' AND password = '$password'");
+```
+Fix:
+```PHP
+DB::select(
+    'SELECT * FROM users WHERE username = ? AND password = ?',
+    [$user, $password],
+);
+```
+
+selectRaw example:
+
+Example code that causes the error:
+```PHP
+$query->selectRaw("DATE_FORMAT(created_at, '{$format}') as {$alias}")
+```
+
+Fix:
+```PHP
+$query->selectRaw("DATE_FORMAT(created_at, '?') as ?", [$format, $alias]);
+```
+
+Or ensure the alias is wrapped and the type of the value is declared as a string:
+```PHP
+function getFormattedDate(Builder $query, string $format = '%Y%m%d', string $alias = 'formatted_date'): Builder
+{
+    $alias = $query->getQuery()->getGrammar()->wrap($alias);
+    $query->selectRaw("DATE_FORMAT(created_at, ?) as {$alias}", [$format]);
+}
+```
+
+### Why does the package not report an expected violation?
+
+First, check that PHPStan analyses the file. Autoloading a file does not add it
+to the analysed paths. For CWE-306, include both application code and routes:
+
+```neon
+parameters:
+    paths:
+        - app/
+        - routes/
+```
+
+Run PHPStan with the configuration file that contains these paths and the
+package include:
+
+```sh
+vendor/bin/phpstan analyse --configuration=phpstan.neon
+```
+
+For CWE-306, also check that the full `Class::method` name is in
+`phpstanCwe.cwe306CriticalOperations`. A `minProbability` greater than the
+finding's score, an ignore, or a baseline can hide a report.
+
+The rule must also support the call syntax. It resolves a call such as
+`$action->execute()` on a typed action parameter, but does not yet track the
+class from a local `$action = new Action()` assignment. See the
+[CWE-306 known limitations](src/Rules/Cwe306/Cwe306LaravelRule.md#known-limitations).
+No report does not prove that the code has an authentication control.
+
+### Why does CWE-306 not recognise my authentication middleware?
+
+`cwe306MiddlewareAliases` maps an alias to its actual middleware class. It does
+not declare that the class requires authentication:
+
+```neon
+parameters:
+    phpstanCwe:
+        cwe306MiddlewareAliases:
+            laravelAuth: Illuminate\Auth\Middleware\Authenticate
+            filamentAuth: Filament\Http\Middleware\Authenticate
+            customAuth: App\Http\Middleware\Authenticate
+```
+
+The rule recognises `laravelAuth` in this example. It currently accepts only
+the exact class `Illuminate\Auth\Middleware\Authenticate` as an authentication
+control. The built-in `auth` alias needs no configuration. Guard suffixes such
+as `auth:sanctum` are supported.
+
+The Filament and custom classes remain unknown. The rule does not inspect their
+code or check their parent classes. Unknown middleware can lower confidence in
+a finding; it does not prove that the route lacks authentication.
+
+> [!WARNING]
+> Map each alias to the class that your application actually uses. Do not map
+> a custom or Filament alias to `Illuminate\Auth\Middleware\Authenticate` only
+> to stop a finding. An incorrect mapping can hide missing authentication.
 
 ## IDE support
 
@@ -411,44 +549,4 @@ Run the same checks with:
 ```sh
 composer test:coverage:check -- --no-tia --parallel
 composer test:mutation:check -- --no-tia --parallel
-```
-
-## How do I fix an error?
-
-Example error:
-
-```text
-CWE-89: Unprotected dynamic value in raw SQL expression. Severity: high. Probability: 80%. https://cwe.mitre.org/data/definitions/89.html
-```
-Example code that causes the error:
-```PHP
-DB::select("SELECT * FROM users WHERE username = '$user' AND password = '$password'");
-```
-Fix:
-```PHP
-DB::select(
-    'SELECT * FROM users WHERE username = ? AND password = ?',
-    [$user, $password],
-);
-```
-
-selectRaw example:
-
-Example code that causes the error:
-```PHP
-$query->selectRaw("DATE_FORMAT(created_at, '{$format}') as {$alias}")
-```
-
-Fix:
-```PHP
-$query->selectRaw("DATE_FORMAT(created_at, '?') as ?", [$format, $alias]);
-```
-
-Or ensure the alias is wrapped and the type of the value is declared as a string:
-```PHP
-function getFormattedDate(Builder $query, string $format = '%Y%m%d', string $alias = 'formatted_date'): Builder
-{
-    $alias = $query->getQuery()->getGrammar()->wrap($alias);
-    $query->selectRaw("DATE_FORMAT(created_at, ?) as {$alias}", [$format]);
-}
 ```

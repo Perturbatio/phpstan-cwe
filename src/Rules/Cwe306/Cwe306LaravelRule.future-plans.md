@@ -161,3 +161,226 @@ points behave the same. Unresolved types must not be presented as confirmed
 Eloquent operations or complete authentication analysis.
 
 MITRE reference: https://cwe.mitre.org/data/definitions/306.html.
+
+## Match critical operations with patterns
+
+### Goal
+
+Let a project require authentication for a group of methods without listing
+each method separately.
+
+Requested examples:
+
+```neon
+parameters:
+    phpstanCwe:
+        cwe306CriticalOperations:
+            - App\Actions\Data\DeleteOldRecordsAction\*
+            - App\Services\*::delete
+```
+
+The intent is to cover actions in `App\Actions\Data\DeleteOldRecordsAction` and `delete` methods
+on service classes. These examples are proposed syntax. The current validator
+rejects them.
+
+This feature selects critical operations. It does not add receiver type
+resolution, container resolution, or new execution paths. The Eloquent plan
+above addresses a separate detection gap.
+
+### Questions to resolve before implementation
+
+1. Should patterns use `cwe306CriticalOperations`, or a separate parameter such
+   as `cwe306CriticalOperationPatterns`? A separate parameter makes the
+   difference between an exact name and a pattern explicit.
+2. Should `*` match one namespace segment, or include child namespaces? Should
+   `**` be available for recursive namespace matching?
+3. What does `App\Actions\Data\DeleteOldRecordsAction\*` select: functions, classes, or methods on
+   those classes? Should the user instead write
+   `App\Actions\Data\DeleteOldRecordsAction\*::*` to select methods explicitly?
+4. If a namespace pattern selects action classes, does it select every method,
+   only public methods, or only entry methods such as `__invoke` and `handle`?
+   Should constructors and magic methods be excluded?
+5. Should a class pattern match the runtime receiver class, the class that
+   declares an inherited method, or either class? How should an override in a
+   child class affect the match?
+6. Should method-name patterns such as `delete*` be supported in the first
+   version? Are `?`, character ranges, or regular expressions needed? A small
+   initial syntax is easier to validate and explain.
+7. Should projects be able to exclude specific public operations from a broad
+   pattern? If so, which rule takes priority when an exact name, an inclusion
+   pattern, and an exclusion match the same operation?
+8. Should a valid pattern with no observed matches produce a diagnostic?
+   Analysed paths can contain only part of an application, so no observed match
+   does not establish a configuration error.
+9. Should reports show only the resolved operation, or also the configuration
+   pattern that selected it? The operation must remain clear when several
+   patterns match.
+
+### 1. Define the configuration contract
+
+- Resolve the questions above and publish a small matching table before adding
+  syntax. Include direct children, child namespaces, inherited methods, and
+  names that must not match.
+- Keep existing exact function and `Class::method` entries valid. Preserve
+  case-insensitive comparison and optional leading namespace separators.
+- Reject malformed patterns with a clear configuration error. Do not silently
+  discard invalid entries or treat them as exact names.
+- Match the full symbol. A prefix such as `App\Services` must not also match
+  `App\ServicesExtra`.
+- Use one platform-independent matching definition. Do not use filesystem glob
+  behaviour for PHP symbol names or interpret user input as a regular expression.
+- Treat a valid configured pattern as an enabled detection source when checking
+  for empty configuration. Coordinate this with the proposed Eloquent option.
+
+### 2. Add a shared operation matcher
+
+- Separate pattern validation and matching from route and authentication
+  analysis. Keep the helper specific to operation selection until another rule
+  has the same contract.
+- Normalise exact names and patterns once during construction. Keep an exact
+  lookup for existing entries.
+- Compile supported patterns once, with literal characters escaped and complete
+  symbol boundaries enforced. Do not build a new expression at each call.
+- Return enough information to identify the concrete matched operation.
+  Preserve existing exact-name report behaviour.
+- Do not enumerate or execute application classes to expand patterns. Match
+  symbols discovered by the supported static analysis.
+
+### 3. Use the matcher at each operation check
+
+- Replace direct critical-operation map checks consistently. Cover ordinary
+  calls, route entry actions, inherited bodies, and unresolved external bodies
+  whose symbol is known.
+- Check direct route actions after their supported request lifecycle, as the
+  current rule does for exact critical operations.
+- Preserve receiver and declaring-class information until inheritance matching
+  is complete. Do not lose the concrete operation name in a wildcard report.
+- Keep supported authentication controls, score calculation, call limits, and
+  route-level reporting unchanged.
+- Deduplicate overlapping patterns and exact entries. Matching the same call
+  several times must not produce several findings or increase confidence.
+- Do not assume that a pattern match proves public access. Unknown middleware
+  and unresolved calls must retain their current confidence limits.
+
+### 4. Add tests
+
+| Area | Required cases |
+|------|----------------|
+| Compatibility | Exact function and method names, case differences, leading separator |
+| Namespaces | Direct child, nested child, adjacent namespace, global namespace |
+| Methods | Matching `delete`, unrelated method, selected action entry methods |
+| Inheritance | Parent declaration, child receiver, child override, external parent |
+| Configuration | Empty list, pattern-only list, malformed syntax, unsupported metacharacters |
+| Overlap | Two patterns, duplicate pattern, exact name plus pattern |
+| Routes | Closure, controller action, invokable controller, service helper |
+| Controls | Public route, `auth`, `auth:sanctum`, request authorization, logout |
+| Limits | Dynamic receiver, container call, deferred callback, unknown middleware |
+| Reports | Concrete operation, identifier, route line, severity, confidence, ignore reason |
+
+Test the matcher directly, then test its use through the scanner. Include
+positive and negative cases for every agreed wildcard boundary. If exclusions
+are accepted, test their priority explicitly.
+
+Run integration tests with both package configuration entry points. Confirm
+that a pattern-only configuration does not produce
+`phpstanCwe.cwe306Configuration`. Check that unrelated rules keep their existing
+behaviour.
+
+### 5. Document and validate
+
+- Add README and rule-document examples for action namespaces and service
+  methods. State whether each pattern includes child namespaces and inherited
+  methods.
+- Explain that pattern matching does not resolve calls such as `$action()` or
+  `app(Action::class)()` unless separate support is added.
+- Describe the risk of selecting helper or public methods too broadly.
+  Authentication and record-specific permission remain separate concerns.
+- Run `composer format`, then `composer analyse`.
+- Use targeted Pest runs with `--no-tia` during implementation. Run the full
+  coverage and mutation checks after the test batch is complete. Cap parallel
+  mutation tests at `--processes=16`.
+
+### Completion criteria
+
+The feature is complete when the agreed action and service patterns select
+exactly the documented operations, existing exact entries keep their behaviour,
+and protected routes do not produce new findings. Overlapping matches must not
+produce duplicate findings. Invalid patterns must fail explicitly.
+
+## Track local object types from assignments
+
+### Goal and scope
+
+Resolve calls on objects created in local variables:
+
+```php
+use App\Actions\Data\DeleteOldRecordsAction;
+use Illuminate\Support\Facades\Route;
+
+Route::get('test', function () {
+    $action = new DeleteOldRecordsAction();
+    $action->execute();
+});
+```
+
+With `App\Actions\Data\DeleteOldRecordsAction::execute` configured as a
+critical operation, this public route must produce a finding.
+
+Start with direct assignments of named `new` expressions. Support full class
+names and imported names in route closures, controller methods, and supported
+helpers. This does not require Larastan or a new configuration option.
+
+### Implementation steps
+
+1. Extend `LaravelAuthenticationScanner::flow()` assignment handling. It
+   currently removes the variable's known type. For a direct named `new`
+   expression, replace the previous type with the resolved class instead.
+2. Record the type only after evaluating the assignment expression. Preserve
+   constructor argument evaluation and stopped paths. Do not treat construction
+   as proof of authentication or complete constructor analysis.
+3. Use the existing method-call resolution and critical-operation checks for
+   later calls on that variable. Do not add a separate operation detector.
+4. Replace or remove the stored type on every supported reassignment. Keep
+   variable facts separate between functions, methods, and closures.
+5. Handle branch changes before retaining types across statements. A conditional
+   reassignment must not leave a stale parameter type or make one branch's new
+   type apply to every path. Keep a type after a branch only when the supported
+   analysis establishes it for all continuing paths; otherwise remove it.
+6. Keep dynamic class names, anonymous classes, reference assignments, object
+   aliases, factories, container calls, and property or array targets outside
+   the initial supported scope. Unsupported changes must not preserve a type
+   that can falsely establish authentication.
+
+### Questions to resolve
+
+1. Should the first version merge equal types across branches, or remove facts
+   for all variables assigned in a branch? Choose a conservative approach and
+   document its limits.
+2. Should `new self` and `new static` be supported initially? If so, preserve the
+   existing distinction between the declaring class and the runtime receiver.
+3. Should object copies such as `$other = $action` be a separate stage, or use
+   the proposed PHPStan type collector? Do not add partial alias tracking
+   without defining reassignment and reference behavior.
+
+### Tests and completion criteria
+
+Add positive and negative Pest cases for direct construction, imported and full
+class names, unrelated methods, replacement objects, unknown reassignment,
+separate scopes, and assignments inside branches. Include a typed request
+replaced on one branch to ensure that a stale type cannot establish
+authentication. Test constructor arguments that contain critical calls or stop
+execution.
+
+Check public and authenticated routes, including `auth:sanctum`, and calls
+through controllers and helpers. Confirm the report identifier, operation,
+route line, confidence, and deduplication. Run integration tests through both
+package configuration entry points.
+
+Update the README FAQ and rule limits when support is available. Run
+`composer format`, then `composer analyse`, and targeted Pest tests with
+`--no-tia`. After the regression batch, run full coverage and mutation checks;
+cap parallel mutation tests at `--processes=16`.
+
+The feature is complete when the example above is detected, accepted
+authentication controls stop the finding, and reassignment or branch-local
+facts cannot cause an unsupported authentication guarantee.
