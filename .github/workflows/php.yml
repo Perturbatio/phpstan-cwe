@@ -44,8 +44,6 @@ jobs:
     - name: Run tests and check coverage
       run: composer test:coverage:check -- --no-tia --parallel --processes=2
 
-#    - name: Check mutation score
-#      run: composer test:mutation:check -- --no-tia --parallel --processes=2
     - name: Check mutation score
       shell: bash
       run: |
@@ -53,11 +51,29 @@ jobs:
           while true; do
             echo "=== Memory usage: $(date -u +%FT%TZ) ==="
             free -m
-            ps -eo pid,ppid,rss,comm --sort=-rss | head -n 16
-            sleep 15
+            ps -eo pid,ppid,rss,comm --sort=-rss | sed -n '1,16p'
+            while read -r pid rss; do
+              echo "=== PHP worker: PID=$pid RSS=${rss}KiB ==="
+              if [[ -r "/proc/$pid/environ" ]]; then
+                tr '\0' '\n' < "/proc/$pid/environ" |
+                  grep -E '^PEST_MUTATION_(TESTING|FILE)=' || true
+              fi
+            done < <(
+              ps -C php -o pid=,rss= |
+                awk '$2 > 524288 { print $1, $2 }'
+            )
+            sleep 5
           done
         ) &
         monitor_pid=$!
         trap 'kill "$monitor_pid" || true' EXIT
 
-        composer test:mutation:check -- --no-tia --parallel --processes=4
+        composer test:mutation:check -- --no-tia --parallel --processes=1 --no-cache
+
+    - name: Save mutation files
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: mutation-files
+        path: vendor/pestphp/pest-plugin-mutate/.temp/mutations/
+        include-hidden-files: true
