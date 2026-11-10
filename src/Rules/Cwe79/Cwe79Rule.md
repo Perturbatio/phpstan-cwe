@@ -64,7 +64,7 @@ that the call uses the PHP function and not a local function.
 A cast to `int` or `float` is also safe for this check. Review all output
 contexts by hand; this rule is not a full security check.
 
-## Known limits
+## Known limitations
 
 - Assignment tracking uses source order, not execution paths. It does not
   merge branches or repeat loops. A later assignment in one branch can hide

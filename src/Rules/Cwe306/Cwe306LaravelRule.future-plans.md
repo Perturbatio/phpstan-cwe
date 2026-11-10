@@ -143,7 +143,7 @@ projects without Laravel or Larastan.
 ### 6. Document and validate
 
 - Update the README and rule document with runnable configuration, public and
-  protected route examples, dependency requirements, and known limits.
+  protected route examples, dependency requirements, and known limitations.
 - State that `find` can return null and that the rule does not check null
   dereferences or record permissions.
 - Run `composer format`, then `composer analyse`.
@@ -255,7 +255,7 @@ above addresses a separate detection gap.
   current rule does for exact critical operations.
 - Preserve receiver and declaring-class information until inheritance matching
   is complete. Do not lose the concrete operation name in a wildcard report.
-- Keep supported authentication controls, score calculation, call limits, and
+- Keep supported authentication controls, score calculation, call limitations, and
   route-level reporting unchanged.
 - Deduplicate overlapping patterns and exact entries. Matching the same call
   several times must not produce several findings or increase confidence.

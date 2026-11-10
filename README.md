@@ -142,7 +142,7 @@ If the rule is enabled with an empty list, it reports one configuration error
 with identifier `phpstanCwe.cwe306Configuration`. This error is not a vulnerability
 finding and is not filtered by `minProbability`.
 Do not include the rule again when you use `extension.neon`. See the rule document for
-middleware configuration, supported syntax, and known limits.
+middleware configuration, supported syntax, and known limitations.
 
 ### Example project configuration
 
@@ -263,7 +263,7 @@ A missing or short reason produces a non-ignorable
 > stop the guest path before the critical operation. An ignored Boolean check
 > or a check after the operation does not protect it.
 
-See the [full rule limits](src/Rules/Cwe306/Cwe306LaravelRule.md#known-limitations)
+See the [full rule limitations](src/Rules/Cwe306/Cwe306LaravelRule.md#known-limitations)
 for unsupported calls and execution paths.
 
 ## Set a minimum probability score

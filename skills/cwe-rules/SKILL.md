@@ -16,7 +16,7 @@ documents in ASD-STE100 Simplified Technical English.
   templates.
 - Report only cases that the rule can support. Do not say that a value is
   safe only because it has a type.
-- Put a clear list of known limits in the rule document.
+- Put a clear list of known limitations in the rule document.
 - Keep rule classes small. Move shared logic into a separate class.
   Examples: `CweReport`, `RequestInput`, `LocalAssignmentFlow`, `BladeTemplateScanner`.
 - Before you write new logic, look for a class that you can use again.
@@ -51,7 +51,7 @@ documents in ASD-STE100 Simplified Technical English.
   unrelated receivers and shadowed helpers. Add rule tests for unsafe
   input, accepted protections, and relevant edge cases. Check both the
   single-rule configuration and `extension.neon`.
-- Keep the shared source list and limits in `src/LaravelRequestInput.md`.
+- Keep the shared source list and limitations in `src/LaravelRequestInput.md`.
   Link to this document from rule documents instead of copying the list.
 
 ## Shared local assignment flow
@@ -74,7 +74,7 @@ documents in ASD-STE100 Simplified Technical English.
   supported evaluation order. Test assignments near sinks and document
   unsupported nested assignments.
 - Keep facts separate by class and named function. Do not mix closure facts
-  with the outer scope. Add explicit closure support or document its limits.
+  with the outer scope. Add explicit closure support or document its limitations.
 - Give `sinks()` a resolver with the event, current scope's variable facts,
   and assignment flag as arguments. The resolver returns the new facts.
   The flow saves assignment facts and returns `[sinkEvent, resolvedFacts]`
@@ -216,7 +216,7 @@ Put the document next to the rule class. Include:
 4. A short unsafe example.
 5. A short safe example.
 6. The protections that the rule accepts.
-7. The known limits.
+7. The known limitations.
 8. Configuration and ignore instructions, if the rule has special
    instructions.
 9. The full MITRE link:
@@ -231,7 +231,7 @@ an identifier.
 - Add a short comment on each line that you test. Say `Report:` or
   `No report:` and give the reason.
 - Include unsafe, safe, and edge cases. Also include cases that show known
-  limits.
+  limitations.
 - Keep test line numbers correct when you add comments. Put comments on the
   same line when possible.
 - Do not put non-rule fixtures in a directory that a scanner test scans.
@@ -247,7 +247,7 @@ Use Pest v5. Also use the `pest-testing` skill when you write tests.
 - Rule tests use a class that extends `PHPStan\Testing\RuleTestCase` and
   `uses()` for that class. The class must not be `final`.
 - Check the exact message and line for each report in a rule test.
-- Test the probability limits: `-1` and `101` cause an error. A score equal
+- Test the probability limitations: `-1` and `101` cause an error. A score equal
   to the minimum gives a report. A score less than the minimum does not.
 - In CLI integration tests, check that PHPStan's top-level `errors` is
   empty before you read file messages.
