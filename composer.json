@@ -24,6 +24,8 @@
         "analyse": "phpstan analyse"
     },
     "require-dev": {
+        "laravel/framework": "^13.0",
+        "larastan/larastan": "^3.0",
         "pestphp/pest": "5.*",
         "laravel/pint": "^1.32",
         "spatie/invade": "^2.2",

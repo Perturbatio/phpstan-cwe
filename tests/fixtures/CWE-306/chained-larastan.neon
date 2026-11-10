@@ -1,0 +1,7 @@
+includes:
+    - chained-laravel.neon
+    - ../../../vendor/larastan/larastan/extension.neon
+
+parameters:
+    bootstrapFiles:
+        - ../shared/larastan-bootstrap.php

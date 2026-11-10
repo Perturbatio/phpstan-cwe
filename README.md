@@ -146,10 +146,19 @@ prove that authentication is absent.
 
 The full extension enables this rule. To use it alone, include
 `config/cwe306-laravel.neon`. Set
-`phpstanCwe.cwe306CriticalOperations`. The default list is empty.
+`phpstanCwe.cwe306CriticalOperations`. The default list is empty. 
+
+The list
+accepts exact function or `Class::method` names and wildcard `Class::method`
+patterns. Use `*` within an identifier and `**` for zero or more namespace
+segments. Prefix an inclusion pattern
+with `!` to exclude it. Exclusions override exact names and inclusion patterns,
+regardless of list order.
+
 If the rule is enabled with an empty list, it reports one configuration error
 with identifier `phpstanCwe.cwe306Configuration`. This error is not a vulnerability
 finding and is not filtered by `minProbability`.
+
 Do not include the rule again when you use `extension.neon`. See the rule document for
 middleware configuration, supported syntax, and known limitations.
 
@@ -170,8 +179,54 @@ parameters:
         cwe306CriticalOperations:
             - App\Models\User::delete
             - App\Actions\DeleteAccount::__invoke
+            - App\Services\*::delete
+            - App\Models\**\*::delete
+            - '!App\Models\Legacy\**\*::delete'
         minProbability: 0
 ```
+
+The wildcard in `App\Services\*::delete` matches calls to `delete` on a class
+directly in `App\Services`. It does not match classes in child namespaces. To
+match calls to all methods on those classes, use `App\Services\*::*`.
+Use `App\Models\**\*::delete` to include classes directly in `App\Models` and
+in all its child namespaces. Use `*Controller::delete*` to match part of a
+class or method name.
+
+| Syntax | Meaning |
+|--------|---------|
+| `*` | Zero or more characters within one identifier |
+| `**` | Zero or more complete namespace segments, before the final class segment |
+| Leading `!` | Exclude matching operations |
+
+Identifiers must remain valid and non-empty. For example, `*Controller` matches
+`Controller`, and `delete*` matches `delete` and `deleteAccount`.
+`App\Models\*::delete` does not match `App\Models\Admin\User::delete`;
+`App\Models\**\*::delete` does. Neither matches `App\ModelsExtra\User::delete`
+or a method named `forceDelete`.
+
+A pattern must include `Class::method`. Embedded or adjacent `**`, a final
+class or method segment of `**`, runs of three stars, `?`, character ranges,
+brace expansion, and wildcard function names are not supported.
+
+Patterns only match symbols that the scanner resolves. They do not enumerate
+classes or add support for dynamic method names. These are PHP namespace patterns,
+not directory patterns. The model pattern does not prove Eloquent inheritance
+or resolve an unknown return type. Chained calls can match the actual
+receiver operation when PHPStan establishes its type.
+
+For chained Eloquent or Query Builder deletes, configure
+`Illuminate\Database\Eloquent\Builder::delete` or
+`Illuminate\Database\Query\Builder::delete`, not only a model pattern.
+Dynamic Eloquent chains can require Larastan in the analysed application.
+See [chained method calls](src/Rules/Cwe306/Cwe306LaravelRule.md#chained-method-calls)
+for configuration, tested dependencies, and confidence limits.
+
+An exclusion pattern starts with `!`. It overrides matching exact names and
+inclusion patterns even when it appears first in the list. For example,
+`!App\Models\Legacy\**\*::delete` excludes `delete` methods on classes directly
+inside `App\Models\Legacy` and in its child namespaces. The rule checks both the runtime class and the
+declaring class for an inherited method. An exclusion that matches either
+operation identity takes priority.
 
 Analyse the route, controller, model, action, and form request files together.
 The minimum score applies to all enabled CWE rules. This example leaves global
@@ -399,8 +454,9 @@ The rule must also support the call syntax. It resolves a call such as
 `$action->execute()` on a typed action parameter or after a direct local
 `$action = new Action()` assignment. It also checks configured methods after
 `$action = app(Action::class)` or `$action = app()->make(Action::class)`.
-It does not resolve other factory results,
-object copies, or dynamic class names. Types changed inside branches are not
+Direct chains such as `$factory->createService()->execute()` can match when
+PHPStan establishes the returned object's type. Assigned factory results,
+object copies, and dynamic class names are not resolved. Types changed inside branches are not
 retained after the branch. See the
 [CWE-306 known limitations](src/Rules/Cwe306/Cwe306LaravelRule.md#known-limitations).
 No report does not prove that the code has an authentication control.

@@ -12,6 +12,7 @@ use PhpParser\Node\Scalar;
 use PhpParser\Node\Stmt;
 use PhpParser\NodeTraverser;
 use PhpParser\NodeVisitor\NameResolver;
+use PhpParser\NodeFinder;
 
 /**
  * Static route and call analysis. Unknown calls do not prove that a control is absent.
@@ -20,11 +21,11 @@ use PhpParser\NodeVisitor\NameResolver;
  * @phpstan-type Operation array{operation: string, operationLine: int}
  * @phpstan-type Finding array{file: string, line: int, operation: string, operationLine: int, probability: int}
  * @phpstan-type ReceiverType string|array{containerClass: string}
+ * @phpstan-import-type CallFact from ChainedCallCollector
  */
 final class LaravelAuthenticationScanner
 {
-    /** @var array<string, string> */
-    private array $criticalOperations = [];
+    private CriticalOperationMatcher $criticalOperations;
 
     /** @var array<string, CallableBody> */
     private array $callables = [];
@@ -34,6 +35,9 @@ final class LaravelAuthenticationScanner
 
     /** @var list<Finding> */
     private array $findings = [];
+
+    /** @var array<int, CallFact> */
+    private array $chainedCalls = [];
 
     /**
      * Global middleware must be supplied from the application's effective configuration.
@@ -48,31 +52,40 @@ final class LaravelAuthenticationScanner
         private readonly array $middlewareAliases = [],
         private readonly ?array $globalMiddleware = null,
     ) {
-        foreach ($criticalOperations as $operation) {
-            if (preg_match('/^\\\\?[a-zA-Z_\x80-\xff][a-zA-Z0-9_\x80-\xff]*(?:\\\\[a-zA-Z_\x80-\xff][a-zA-Z0-9_\x80-\xff]*)*(?:::[a-zA-Z_\x80-\xff][a-zA-Z0-9_\x80-\xff]*)?$/D', $operation) !== 1) {
-                throw new \InvalidArgumentException('CWE-306 critical operations must be function names or Class::method names.');
-            }
-            $this->criticalOperations[strtolower(ltrim($operation, '\\'))] = ltrim($operation, '\\');
-        }
+        $this->criticalOperations = new CriticalOperationMatcher($criticalOperations);
     }
 
     public function hasCriticalOperations(): bool
     {
-        return $this->criticalOperations !== [];
+        return $this->criticalOperations->hasCriticalOperations();
     }
 
     /**
      * @param array<string, array<Stmt>> $files
+     * @param array<string, list<CallFact|null>> $callFacts
      * @return list<Finding>
      */
-    public function scan(array $files): array
+    public function scan(array $files, array $callFacts = []): array
     {
         // Build the function and class lists before checking routes.
         // A route can call code in a file that appears later in the input.
         $this->callables = [];
         $this->classes = [];
         $this->findings = [];
+        $this->chainedCalls = [];
         foreach ($files as $file => $nodes) {
+            $facts = [];
+            foreach ($callFacts[$file] ?? [] as $fact) {
+                if ($fact !== null) {
+                    $facts[$fact['start'] . ':' . $fact['end']] = $fact;
+                }
+            }
+            foreach ((new NodeFinder())->findInstanceOf($nodes, Expr\CallLike::class) as $call) {
+                $fact = $facts[$call->getStartFilePos() . ':' . $call->getEndFilePos()] ?? null;
+                if ($fact !== null) {
+                    $this->chainedCalls[spl_object_id($call)] = $fact;
+                }
+            }
             $traverser = new NodeTraverser(new NameResolver());
             $files[$file] = $traverser->traverse($nodes);
             $this->index($files[$file]);
@@ -443,14 +456,18 @@ final class LaravelAuthenticationScanner
      */
     private function invoke(string $symbol, bool $authenticated, array $stack, array &$operations, bool &$complete, int $line, bool $entry = false): ?bool
     {
-        $key = strtolower($symbol);
-        if (isset($this->criticalOperations[$key]) && !$entry) {
+        $body = $this->body($symbol);
+        $criticalOperation = $body === null
+            ? $this->criticalOperations->match($symbol)
+            : $this->criticalOperations->matchAny([$symbol, $body['symbol']]);
+        if ($criticalOperation !== null && !$entry) {
             if (!$authenticated) {
-                $operations[] = ['operation' => $this->criticalOperations[$key], 'operationLine' => $line];
+                $operations[] = ['operation' => $criticalOperation, 'operationLine' => $line];
             }
 
             return $authenticated;
         }
+        $key = strtolower($symbol);
         if (in_array($key, $stack, true) || count($stack) >= 16) {
             // Stop recursive or deep calls. A stopped scan is incomplete, not proof
             // that the remaining code has no authentication check.
@@ -458,16 +475,14 @@ final class LaravelAuthenticationScanner
 
             return $authenticated;
         }
-        $body = $this->body($symbol);
         if ($body === null || $body['node']->stmts === null) {
-            if (isset($this->criticalOperations[$key]) && !$authenticated) {
-                $operations[] = ['operation' => $this->criticalOperations[$key], 'operationLine' => $line];
+            if ($criticalOperation !== null && !$authenticated) {
+                $operations[] = ['operation' => $criticalOperation, 'operationLine' => $line];
             }
             $complete = false;
 
             return $authenticated;
         }
-        $declaredOperation = $this->criticalOperations[strtolower($body['symbol'])] ?? null;
         $receiver = str_contains($symbol, '::') ? explode('::', $symbol)[0] : null;
         $types = $this->types($body['node']->params, $receiver);
         // self refers to the declaring class. $this can refer to a child instance.
@@ -481,7 +496,6 @@ final class LaravelAuthenticationScanner
                 return null;
             }
         }
-        $criticalOperation = $this->criticalOperations[$key] ?? $declaredOperation;
         if ($criticalOperation !== null) {
             if (!$authenticated) {
                 $operations[] = ['operation' => $criticalOperation, 'operationLine' => $line];
@@ -798,6 +812,7 @@ final class LaravelAuthenticationScanner
             foreach ($node->getArgs() as $argument) {
                 $this->expressions($argument->value, $states, $types, $stack, $operations, $complete);
             }
+            $executingStates = $states;
             if ($node instanceof Expr\NullsafeMethodCall) {
                 $states = array_values(array_unique([...$states, ...$nullableStates], SORT_REGULAR));
             }
@@ -811,16 +826,32 @@ final class LaravelAuthenticationScanner
                 return;
             }
             $containerSymbol = $this->containerCallSymbol($node, $types);
-            $symbol = $containerSymbol ?? $this->callSymbol($node, $types);
             if ($containerSymbol !== null) {
                 $complete = false;
-                // Only an explicit operation can be checked. Do not execute a
+                // Only a selected operation can be checked. Do not execute a
                 // requested class body as if the container binding were known.
-                if (!isset($this->criticalOperations[strtolower($containerSymbol)])) {
+                $criticalOperation = $this->criticalOperations->match($containerSymbol);
+                if ($criticalOperation !== null && in_array(false, $states, true)) {
+                    $operations[] = ['operation' => $criticalOperation, 'operationLine' => $node->getStartLine()];
+                }
+            } elseif (!$isControl) {
+                $fact = $this->chainedCalls[spl_object_id($node)] ?? null;
+                if ($fact !== null && ($node instanceof Expr\MethodCall || $node instanceof Expr\NullsafeMethodCall)
+                    && $node->name instanceof Identifier && $fact['method'] === $node->name->toString()) {
+                    // Receiver facts select operations. They cannot establish authentication.
+                    $complete = false;
+                    if (in_array(false, $executingStates, true)) {
+                        foreach ($fact['candidates'] as $candidate) {
+                            $criticalOperation = $this->criticalOperations->matchAny($candidate);
+                            if ($criticalOperation !== null) {
+                                $operations[] = ['operation' => $criticalOperation, 'operationLine' => $node->getStartLine()];
+                            }
+                        }
+                    }
+
                     return;
                 }
-            }
-            if (!$isControl) {
+                $symbol = $this->callSymbol($node, $types);
                 if ($symbol === null) {
                     $complete = false;
                 } else {
@@ -925,7 +956,7 @@ final class LaravelAuthenticationScanner
             // PHP checks the current namespace before it falls back to a global function.
             // Do not match a global critical function when a local function replaces it.
             if ($fallback instanceof Name && (isset($this->callables[strtolower($fallback->toString())])
-                || isset($this->criticalOperations[strtolower($fallback->toString())]))) {
+                || $this->criticalOperations->match($fallback->toString()) !== null)) {
                 return $fallback->toString();
             }
             return $name;

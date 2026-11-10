@@ -49,7 +49,7 @@ final class Cwe306LaravelRule implements Rule
             // must not allow an invalid reason to pass without an error.
             array_push($reports, ...IgnoreReason::reports($files[$file], $file, 'phpstanCwe.cwe306', 306));
         }
-        foreach ($this->scanner->scan($files) as $finding) {
+        foreach ($this->scanner->scan($files, $node->get(ChainedCallCollector::class)) as $finding) {
             if (!CweReport::isEnabled($this->minProbability, $finding['probability'])) {
                 continue;
             }

@@ -1,0 +1,10 @@
+includes:
+    - ../../../extension.neon
+
+parameters:
+    phpstanCwe:
+        cwe306CriticalOperations:
+            - App\Http\**\*Controller::delete*
+            - App\Models\**\*::delete
+            - '!App\Models\Legacy\**\*::delete'
+        cwe306GlobalMiddleware: []

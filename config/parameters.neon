@@ -6,7 +6,7 @@ parameters:
     phpstanCwe:
         # Report findings with a probability score at or above this value (0-100)
         minProbability: 0
-        # CWE-306 is opt-in. List functions or Class::method names that require authentication.
+        # CWE-306 is opt-in. List exact operations or wildcard Class::method patterns.
         cwe306CriticalOperations: []
         # Map middleware aliases to their full class names.
         cwe306MiddlewareAliases: []

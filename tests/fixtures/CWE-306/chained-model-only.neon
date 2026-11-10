@@ -1,0 +1,11 @@
+includes:
+    - ../../../config/cwe306-laravel.neon
+    - ../../../vendor/larastan/larastan/extension.neon
+
+parameters:
+    bootstrapFiles:
+        - ../shared/larastan-bootstrap.php
+    phpstanCwe:
+        cwe306CriticalOperations:
+            - App\Models\**\*::delete
+        cwe306GlobalMiddleware: []

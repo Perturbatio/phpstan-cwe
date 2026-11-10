@@ -30,13 +30,62 @@ parameters:
 ```
 
 The critical operation list is empty by default. Names are full function names
-or `Class::method` names. Name comparison is not case-sensitive. Do not list a
-valid public operation, such as a contact form submission.
+or `Class::method` names. It also accepts wildcard `Class::method` patterns.
+Name comparison is not case-sensitive. Do not list a valid public operation,
+such as a contact form submission.
+
+Use `*` within an identifier and `**` for recursive namespace matching:
+
+```neon
+parameters:
+    phpstanCwe:
+        cwe306CriticalOperations:
+            - App\Services\*::delete
+            - App\Actions\Data\DeleteRecords\*::*
+            - App\Models\**\*::delete
+            - App\Http\**\*Controller::delete*
+            - '!App\Models\Legacy\**\*::delete'
+```
+
+`App\Services\*::delete` matches calls to `delete` on classes directly in
+`App\Services`. It does not match classes in child namespaces. `*::*` matches
+calls to all methods on those direct child classes.
+
+| Syntax | Meaning |
+|--------|---------|
+| `*` | Zero or more characters within one identifier |
+| `**` | Zero or more complete namespace segments, before the final class segment |
+| Leading `!` | Exclude matching operations |
+
+The matched identifiers must be valid and non-empty. `*Controller` matches
+`Controller` and `UserController`. `delete*` matches `delete` and
+`deleteAccount`. A partial star cannot cross `\` or `::`.
+
+`App\Models\**\*::delete` matches `App\Models\User::delete` and
+`App\Models\Admin\Audit\User::delete`. It does not match
+`App\ModelsExtra\User::delete`, `forceDelete`, or `deleteQuietly`.
+`**` includes zero namespace segments. It must be a complete namespace
+segment, not part of an identifier or the final class or method segment.
+Adjacent `**` segments, runs of three stars, `?`, character ranges, brace
+expansion, and wildcard function names are not supported.
+
+A wildcard entry must use `Class::method` syntax. Patterns only
+match symbols that the scanner resolves. They do not enumerate classes or add
+support for dynamic calls. They match PHP symbols, not directory paths.
+The model pattern does not establish Eloquent inheritance or add support for
+unresolved chains such as `User::find($id)->delete()`.
+
+Prefix an inclusion pattern with `!` to exclude its matches. Exclusions take
+priority over matching exact names and inclusion patterns, regardless of list
+order. For an inherited method, the rule checks both the runtime class and the
+class that declares the method. An exclusion that matches either identity
+blocks the operation.
 
 If the list is empty, the rule reports one configuration error per analysis:
 `phpstanCwe.cwe306Configuration`. It does not scan for critical operations until
-you configure at least one operation. This error is not a vulnerability finding.
-The `minProbability` setting does not filter it.
+you configure at least one exact operation or inclusion pattern. Exclusion
+patterns alone do not enable detection. This error is not a vulnerability
+finding. The `minProbability` setting does not filter it.
 
 The full extension already enables this rule. Include only `extension.neon`
 when you use all rules. Do not also include the individual configuration or
@@ -117,8 +166,9 @@ receiver can be used. Reassignment and branch limitations are the same as for lo
 construction.
 
 The requested class can differ from the actual object because of container
-bindings. The rule therefore checks only an exact configured method on that
-requested class. It does not follow its body or use it to establish a user
+bindings. The rule therefore matches only the requested class and method
+against exact names and patterns. It does not resolve a declaring class,
+follow the requested body, or use it to establish a user
 identity or an authentication guarantee. Container calls lower confidence:
 these routes score 80% with confirmed empty middleware, or 40% when middleware
 is unknown.
@@ -126,6 +176,55 @@ is unknown.
 String or dynamic class arguments, unpacked arguments, direct chained calls,
 other container methods, and calls through a stored container are not supported.
 A local function that replaces `app` is not accepted as Laravel's helper.
+
+### Chained method calls
+
+The rule uses PHPStan receiver types to select configured operations in calls
+such as these:
+
+```php
+ProductIssue::where('created_at', '<', $cutoff)->delete();
+ProductIssue::query()->where('created_at', '<', $cutoff)->delete();
+DB::table('issues')->where('created_at', '<', $cutoff)->delete();
+$factory->createService()->execute();
+```
+
+Configure the actual receiver operation:
+
+```neon
+parameters:
+    phpstanCwe:
+        cwe306CriticalOperations:
+            - Illuminate\Database\Eloquent\Builder::delete
+            - Illuminate\Database\Query\Builder::delete
+            - App\Services\Action::execute
+```
+
+An Eloquent builder is not its model. `App\Models\**\*::delete` alone does not
+select builder deletes. The rule does not automatically classify every method
+named `delete` as critical. Generic model information does not create a model
+operation alias.
+
+The integration tests use Laravel 13 and PHPStan 2.3, with and without
+Larastan 3.14. Plain PHPStan resolves the tested `query()->where()` and
+Query Builder chains from Laravel's declared types. The tested dynamic
+`Model::where()` chain requires Larastan. Install and configure a compatible
+Larastan version in the analysed application when PHPStan cannot resolve a
+dynamic receiver. Laravel and Larastan remain development dependencies of
+this package, not installation requirements.
+
+Only statically named calls with a supported object alternative are selected.
+Mixed and unresolved receivers remain unknown. Nullable and union receivers
+can identify possible operations, not certain execution. Exclusions apply to
+each candidate's receiver and declaring class. An excluded union alternative
+does not exclude a different operation on another alternative.
+
+Collected types select operations only. The rule does not follow an external
+method body or use its receiver type to establish authentication. Chained calls
+keep confidence limited to 80% with confirmed empty middleware, or 40% when
+middleware is unknown. Receiver expressions and arguments are checked before
+the outer operation. Supported authentication middleware still stops findings.
+Calls inside deferred callbacks are not treated as executed.
 
 ## Accepted controls
 
@@ -210,7 +309,9 @@ enforce. Use the form above to record a reason.
 - Local object tracking replaces facts on reassignment and removes facts
   changed inside branches or unsupported statements. It does not merge branch
   types. Dynamic classes, anonymous classes, `new self`, `new static`,
-  `new parent`, factories, and references are not supported receiver sources.
+  `new parent`, assigned factory results, and references are not supported
+  local receiver sources. Direct factory chains can use collected PHPStan
+  receiver types as described above.
   Constructor arguments are checked, but constructor bodies are not followed.
   Construction alone does not establish authentication.
 - Call depth is limited to 16. Recursion and unresolved calls lower confidence.

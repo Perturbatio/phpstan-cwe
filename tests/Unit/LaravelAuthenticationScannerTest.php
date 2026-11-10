@@ -225,13 +225,17 @@ it('does not use a special class name as a local receiver type', function (strin
     expect(scanLaravelAuthentication($source))->toBe([]);
 })->with(['self', 'static', 'parent']);
 
-function scanLaravelAuthentication(string $source, ?array $globalMiddleware = [], array $aliases = []): array
-{
+function scanLaravelAuthentication(
+    string $source,
+    ?array $globalMiddleware = [],
+    array $aliases = [],
+    array $criticalOperations = ['App\AccountService::delete', 'eraseAccounts'],
+): array {
     $parser = (new ParserFactory())->createForNewestSupportedVersion();
     $nodes = $parser->parse('<?php ' . $source);
 
     return (new LaravelAuthenticationScanner(
-        ['App\AccountService::delete', 'eraseAccounts'],
+        $criticalOperations,
         $aliases,
         $globalMiddleware,
     ))->scan(['routes.php' => $nodes]);
@@ -341,6 +345,193 @@ it('does not invent authentication from unresolved or recursive calls', function
 it('validates critical operation names', function (): void {
     expect(fn () => new LaravelAuthenticationScanner([''], [], null))->toThrow(InvalidArgumentException::class);
 });
+
+it('matches configured operation patterns and excludes selected service methods', function (): void {
+    $source = <<<'PHP'
+namespace App\Services {
+    class AccountService { public function delete(): void {} }
+}
+namespace App\Services\Legacy {
+    class LegacyService { public function delete(): void {} }
+}
+namespace {
+    use Illuminate\Support\Facades\Route;
+    Route::post('/accounts', function (\App\Services\AccountService $service) { $service->delete(); });
+    Route::post('/legacy', function (\App\Services\Legacy\LegacyService $service) { $service->delete(); });
+}
+PHP;
+    $reports = scanLaravelAuthentication($source, [], [], [
+        'App\Services\Legacy\LegacyService::delete',
+        'App\Services\*::*',
+        '!App\Services\Legacy\*::*',
+    ]);
+
+    expect($reports)->toHaveCount(1)
+        ->and($reports[0]['operation'])->toBe('App\Services\AccountService::delete');
+});
+
+it('applies inherited operation exclusions before reporting ordinary calls', function (string $exclusion): void {
+    $source = <<<'PHP'
+namespace App;
+use Illuminate\Support\Facades\Route;
+class BaseService { public function delete(): void {} }
+class AccountService extends BaseService {}
+Route::post('/accounts', function (AccountService $service) { $service->delete(); });
+PHP;
+    expect(scanLaravelAuthentication($source, [], [], [
+        'App\*::delete',
+        $exclusion,
+    ]))->toBe([]);
+})->with(['!App\BaseService::*', '!App\AccountService::*']);
+
+it('matches a declaring class without applying it to an override', function (string $body, int $count): void {
+    $source = 'namespace App; use Illuminate\Support\Facades\Route; '
+        . 'class BaseService { public function delete(): void {} } '
+        . 'class AccountService extends BaseService { ' . $body . ' } '
+        . 'Route::post("/accounts", function (AccountService $service) { $service->delete(); });';
+
+    $reports = scanLaravelAuthentication($source, [], [], ['App\BaseService::*']);
+    expect($reports)->toHaveCount($count);
+    if ($count !== 0) {
+        expect($reports[0]['operation'])->toBe('App\BaseService::delete');
+    }
+})->with([['', 1], ['public function delete(): void {}', 0]]);
+
+it('keeps container pattern calls separate from requested class bodies', function (): void {
+    $source = <<<'PHP'
+namespace App;
+use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Auth;
+class BaseService { public function delete(): void { if (!Auth::check()) { exit; } } }
+class AccountService extends BaseService {}
+Route::post('/accounts', function () {
+    $service = app(AccountService::class);
+    $service->delete();
+    \eraseAccounts();
+});
+PHP;
+    $reports = scanLaravelAuthentication($source, [], [], [
+        'App\AccountService::*',
+        '!App\BaseService::*',
+        'eraseAccounts',
+    ]);
+
+    expect(array_column($reports, 'operation'))->toBe(['App\AccountService::delete', 'eraseAccounts'])
+        ->and(array_column($reports, 'operationLine'))->toBe([8, 9])
+        ->and(array_column($reports, 'probability'))->toBe([80, 80]);
+});
+
+it('stops recursive method scans without regard to symbol case', function (): void {
+    $nodes = (new ParserFactory())->createForNewestSupportedVersion()->parse(<<<'PHP'
+<?php
+namespace App;
+class Guard {
+    public function enforce() {
+        if (!\Illuminate\Support\Facades\Auth::check()) { exit; }
+    }
+}
+PHP);
+    $scanner = new LaravelAuthenticationScanner();
+    $scanner->scan(['guard.php' => $nodes]);
+    $operations = [];
+    $complete = true;
+    $result = (new ReflectionMethod($scanner, 'invoke'))->invokeArgs($scanner, [
+        'App\Guard::enforce', false, ['app\guard::enforce'], &$operations, &$complete, 1,
+    ]);
+
+    expect($result)->toBeFalse()
+        ->and($complete)->toBeFalse()
+        ->and($operations)->toBe([]);
+});
+
+it('preserves authentication and execution limits for pattern-selected calls', function (string $body, string $middleware, int $count, int $probability): void {
+    $source = 'namespace App; use Illuminate\Support\Facades\Route; use Illuminate\Support\Facades\Auth; '
+        . 'class AccountService { public function delete(): void {} } '
+        . 'Route::post("/accounts", function (AccountService $service) { ' . $body . ' })' . $middleware . ';';
+    $reports = scanLaravelAuthentication($source, [], [], [
+        'App\*::delete',
+        'App\AccountService::*',
+        'App\AccountService::delete',
+        'App\*::delete',
+    ]);
+
+    expect($reports)->toHaveCount($count);
+    if ($count !== 0) {
+        expect($reports[0]['operation'])->toBe('App\AccountService::delete')
+            ->and($reports[0]['probability'])->toBe($probability);
+    }
+})->with([
+    ['$service->delete(); $service->delete();', '', 1, 100],
+    ['$service->delete();', '->middleware("auth")', 0, 100],
+    ['$service->delete();', '->middleware("auth:sanctum")', 0, 100],
+    ['$service->delete();', '->middleware("unknown")', 1, 60],
+    ['if (!Auth::check()) { exit; } $service->delete();', '', 0, 100],
+    ['if (!Auth::check()) { exit; } Auth::logout(); $service->delete();', '', 1, 100],
+    ['$callback = function () use ($service) { $service->delete(); };', '', 0, 100],
+    ['$service->{$method}();', '', 0, 100],
+    ['$service = app(AccountService::class); $service->delete();', '', 1, 80],
+]);
+
+it('preserves controls and execution limits for recursive globs', function (string $body, string $middleware, int $count, int $probability): void {
+    $source = 'namespace App\Models\Admin; use Illuminate\Support\Facades\Route; use Illuminate\Support\Facades\Auth; '
+        . 'class User { public function delete(): void {} } '
+        . 'Route::post("/users", function (User $model) { ' . $body . ' })' . $middleware . ';';
+    $reports = scanLaravelAuthentication($source, [], [], [
+        'App\Models\**\*::delete*', 'App\**\Us*::*', 'App\Models\**\*::delete*',
+    ]);
+
+    expect($reports)->toHaveCount($count);
+    if ($count !== 0) {
+        expect($reports[0]['operation'])->toBe('App\Models\Admin\User::delete')
+            ->and($reports[0]['operationLine'])->toBe(1)
+            ->and($reports[0]['probability'])->toBe($probability);
+    }
+})->with([
+    ['$model->delete(); $model->delete();', '', 1, 100],
+    ['$model->delete();', '->middleware("auth")', 0, 100],
+    ['$model->delete();', '->middleware("auth:sanctum")', 0, 100],
+    ['$model->delete();', '->middleware("unknown")', 1, 60],
+    ['if (!Auth::check()) { exit; } $model->delete();', '', 0, 100],
+    ['if (!Auth::check()) { exit; } Auth::logout(); $model->delete();', '', 1, 100],
+    ['$callback = function () use ($model) { $model->delete(); };', '', 0, 100],
+    ['$model->{$method}();', '', 0, 100],
+    ['$model = app(User::class); $model->delete();', '', 1, 80],
+    ['exit; $model->delete();', '', 0, 100],
+]);
+
+it('applies recursive exclusions to inherited declarations and receivers', function (string $exclusion): void {
+    $source = <<<'PHP'
+namespace App\Models\Base { class Record { public function delete(): void {} } }
+namespace App\Models\Admin { class User extends \App\Models\Base\Record {} }
+namespace {
+    use Illuminate\Support\Facades\Route;
+    Route::post('/users', function (\App\Models\Admin\User $model) { $model->delete(); });
+}
+PHP;
+    expect(scanLaravelAuthentication($source, [], [], [
+        'App\Models\**\*::delete*', $exclusion,
+    ]))->toBe([]);
+})->with(['!App\**\Base\*::del*', '!App\Models\**\Us*::*']);
+
+it('checks form requests before a glob-selected controller entry', function (string $authorization, int $count): void {
+    $source = <<<'PHP'
+namespace App;
+use Illuminate\Support\Facades\Route;
+class DeleteRequest extends \Illuminate\Foundation\Http\FormRequest {
+    public function authorize(): bool { AUTHORIZATION }
+}
+class UserController { public function deleteAccount(DeleteRequest $request): void {} }
+Route::post('/users', [UserController::class, 'deleteAccount']);
+PHP;
+    $reports = scanLaravelAuthentication(str_replace('AUTHORIZATION', $authorization, $source), [], [], [
+        'App\**\*Controller::delete*',
+    ]);
+
+    expect($reports)->toHaveCount($count);
+    if ($count !== 0) {
+        expect($reports[0]['operation'])->toBe('App\UserController::deleteAccount');
+    }
+})->with([['return $this->user() !== null;', 0], ['return true;', 1]]);
 
 it('checks controller middleware for the selected action', function (string $declaration, int $count): void {
     $source = <<<'PHP'

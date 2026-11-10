@@ -77,6 +77,75 @@ it('loads the Laravel authentication rule with each package configuration', func
         );
 })->with(['tests/fixtures/CWE-306/laravel.neon', 'tests/fixtures/CWE-306/extension.neon']);
 
+it('loads critical operation patterns with each package configuration', function (string $config): void {
+    $result = analyseWithConfig($config, 'tests/fixtures/CWE-306/controller.php');
+    $messages = array_values($result['files'])[0]['messages'];
+
+    expect($result['totals']['file_errors'])->toBe(1)
+        ->and($messages)->toHaveCount(1)
+        ->and($messages[0]['identifier'])->toBe('phpstanCwe.cwe306')
+        ->and($messages[0]['message'])->toContain('critical operation App\Http\Controllers\UserController::delete')
+        ->and($messages[0]['line'])->toBe(37);
+})->with([
+    'tests/fixtures/CWE-306/patterns-laravel.neon',
+    'tests/fixtures/CWE-306/patterns-extension.neon',
+]);
+
+it('matches recursive model patterns and exclusions through both configurations', function (string $config): void {
+    $result = analyseWithConfig($config, 'tests/fixtures/CWE-306/globs.php');
+    $file = dirname(__DIR__, 2) . '/tests/fixtures/CWE-306/globs.php';
+    $messages = $result['files'][$file]['messages'];
+
+    expect($result['totals']['file_errors'])->toBe(2)
+        ->and(array_column($messages, 'line'))->toBe([48, 51])
+        ->and(array_column($messages, 'identifier'))->toBe(['phpstanCwe.cwe306', 'phpstanCwe.cwe306'])
+        ->and(array_column($messages, 'ignorable'))->toBe([true, true])
+        ->and(array_column($messages, 'message'))->toBe(array_map(
+            fn (string $operation): string => 'CWE-306: A Laravel route reaches critical operation ' . $operation
+                . ' without a supported authentication control. Severity: high. Probability: 100%. https://cwe.mitre.org/data/definitions/306.html',
+            ['App\Models\User::delete', 'App\Models\Admin\User::delete'],
+        ));
+})->with([
+    'tests/fixtures/CWE-306/patterns-laravel.neon',
+    'tests/fixtures/CWE-306/patterns-extension.neon',
+]);
+
+it('resolves real builder and factory chains with optional Larastan', function (string $config, bool $larastan): void {
+    $result = analyseWithConfig($config, 'tests/fixtures/CWE-306/chained.php');
+    $file = dirname(__DIR__, 2) . '/tests/fixtures/CWE-306/chained.php';
+    $messages = $result['files'][$file]['messages'];
+    $operations = [
+        'Illuminate\Database\Eloquent\Builder::delete',
+        'Illuminate\Database\Query\Builder::delete',
+        'App\Services\Action::execute',
+        'Illuminate\Database\Query\Builder::delete',
+        'Illuminate\Database\Eloquent\Builder::delete',
+    ];
+    if ($larastan) {
+        array_unshift($operations, 'Illuminate\Database\Eloquent\Builder::delete');
+    }
+
+    expect($result['totals']['file_errors'])->toBe(count($operations))
+        ->and(array_column($messages, 'line'))->toBe($larastan ? [49, 52, 55, 58, 67, 79] : [52, 55, 58, 67, 79])
+        ->and(array_column($messages, 'identifier'))->toBe(array_fill(0, count($operations), 'phpstanCwe.cwe306'))
+        ->and(array_column($messages, 'ignorable'))->toBe(array_fill(0, count($operations), true))
+        ->and(array_column($messages, 'message'))->toBe(array_map(
+            fn (string $operation): string => 'CWE-306: A Laravel route reaches critical operation ' . $operation
+                . ' without a supported authentication control. Severity: high. Probability: 80%. https://cwe.mitre.org/data/definitions/306.html',
+            $operations,
+        ));
+})->with([
+    ['tests/fixtures/CWE-306/chained-laravel.neon', false],
+    ['tests/fixtures/CWE-306/chained-extension.neon', false],
+    ['tests/fixtures/CWE-306/chained-larastan.neon', true],
+    ['tests/fixtures/CWE-306/chained-larastan-extension.neon', true],
+]);
+
+it('does not use a model pattern as a builder operation alias', function (): void {
+    $result = analyseWithConfig('tests/fixtures/CWE-306/chained-model-only.neon', 'tests/fixtures/CWE-306/chained.php');
+    expect($result['totals']['file_errors'])->toBe(0);
+});
+
 it('reports the default empty CWE-306 configuration through PHPStan', function (string $config): void {
     $result = analyseWithConfig($config, 'tests/fixtures/CWE-306/laravel.php');
     $messages = array_merge(...array_column(array_values($result['files']), 'messages'));

@@ -1,0 +1,10 @@
+includes:
+    - ../../../config/cwe306-laravel.neon
+
+parameters:
+    phpstanCwe:
+        cwe306CriticalOperations:
+            - Illuminate\Database\Eloquent\Builder::delete
+            - Illuminate\Database\Query\Builder::delete
+            - App\Services\Action::execute
+        cwe306GlobalMiddleware: []

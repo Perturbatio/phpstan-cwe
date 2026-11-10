@@ -11,15 +11,28 @@ all comments and documents in ASD-STE100 Simplified Technical English.
 
 ## Run mutation tests
 
-Run the full mutation suite. Do not use a test filter. Mutation testing needs
-the complete coverage run.
+Focus mutation testing on the rule currently being changed. Include its
+rule-specific collectors, scanners, and helpers in the mutation target.
+For example, target the CWE-306 directory:
 
 ```sh
-composer test:mutation:check -- --no-tia --parallel --no-cache
+composer test:mutation:check -- --no-tia --parallel --path=src/Rules/Cwe306
 ```
 
-Agents must use `--no-tia` for Pest runs. The mutation command still runs the
-full suite.
+Limit the mutation targets, not the available tests. Do not use a test filter
+or select individual test files: keep all relevant tests available for the
+coverage run and mutation checks.
+
+Run the full mutation suite only when the change can affect other rules.
+Examples include changes to shared input detection, shared assignment flow,
+report generation, or common configuration. In those cases, omit `--path`:
+
+```sh
+composer test:mutation:check -- --no-tia --parallel
+```
+
+Agents must use `--no-tia` for Pest runs. These mutation scope requirements do
+not replace the normal test and analysis requirements.
 
 You can pass `--processes=16` with `--parallel` when the package's Composer
 patch is applied. The patch removes `--processes=...` from mutation test
@@ -28,7 +41,7 @@ the installed dependencies do not have the patch. Without the patch,
 Pest 5.3.5 passes this option to the test subprocess without `--parallel`.
 The subprocess stops with an unknown-option error, which Pest counts as
 a detected mutation. Do not use `--processes` without the patch.
-Use `--no-cache` to check each mutation again.
+Avoid using `--no-cache` except when you *need* to check each mutation again.
 The Composer command fails on PHP warnings. A warning from changed code
 must not count as a passing test.
 
@@ -76,7 +89,8 @@ behavioural mutant.
 
 ## Verify the fix
 
-- Re-run the full mutation command.
+- Re-run the mutation command with the same rule-specific targets. Run the
+  full mutation suite only if the change can affect other rules.
 - Confirm that the fixed mutants no longer appear as uncovered or escaped.
 - Run `composer format` and `composer analyse` after changing PHP code.
 - Do not change unrelated code or tests to improve the mutation score.

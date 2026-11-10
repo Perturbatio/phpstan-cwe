@@ -11,6 +11,10 @@ authentication control.
 This is a plan, not current functionality. Configuration names below are
 proposals.
 
+The previous completed label was incorrect. Configured chained-call matching
+is now available, but automatic Eloquent delete selection and
+`cwe306DetectEloquentDeletes` are not implemented.
+
 ### Scope
 
 Start with these calls:
@@ -162,7 +166,13 @@ Eloquent operations or complete authentication analysis.
 
 MITRE reference: https://cwe.mitre.org/data/definitions/306.html.
 
-## Match critical operations with patterns
+## COMPLETED: Match critical operations with patterns
+
+Pattern matching is now supported in `cwe306CriticalOperations`. Use `*` for
+one complete symbol segment and `!` before an exclusion pattern. Exclusions
+take priority over exact names and inclusion patterns. See the
+[rule document](Cwe306LaravelRule.md#configuration) for the supported contract.
+The design questions and implementation steps below record the original plan.
 
 ### Goal
 
@@ -180,8 +190,10 @@ parameters:
 ```
 
 The intent is to cover actions in `App\Actions\Data\DeleteOldRecordsAction` and `delete` methods
-on service classes. These examples are proposed syntax. The current validator
-rejects them.
+on service classes. The service pattern is supported. The namespace-only action
+pattern is not supported. Use
+`App\Actions\Data\DeleteOldRecordsAction\*::*` to select methods on direct child
+classes.
 
 This feature selects critical operations. It does not add receiver type
 resolution, container resolution, or new execution paths. The Eloquent plan
@@ -307,90 +319,305 @@ exactly the documented operations, existing exact entries keep their behaviour,
 and protected routes do not produce new findings. Overlapping matches must not
 produce duplicate findings. Invalid patterns must fail explicitly.
 
-## Track local object types from assignments
+## COMPLETED: Extend critical operation patterns with glob syntax
 
-Direct named construction is now supported. The first version removes changed
-types after branches; it does not merge them. Object copies and `new self`,
-`new static`, and `new parent` remain outside this support. The steps below
-record the design and the limitations for later work.
+### Goal
 
-Direct assignments from `app(Action::class)` and
-`app()->make(Action::class)` are also supported for exact configured operations.
-The requested class remains uncertain. Container bindings are not resolved,
-and requested class bodies cannot establish authentication.
+Let a project select methods across child namespaces and match part of a class
+or method name. Keep the existing `cwe306CriticalOperations` parameter.
 
-### Goal and scope
+Globbing is now supported. The contract, implementation steps, and completion
+criteria below record the implementation plan. See the
+[rule document](Cwe306LaravelRule.md#configuration) for current configuration.
 
-Resolve calls on objects created in local variables:
+Proposed configuration:
 
-```php
-use App\Actions\Data\DeleteOldRecordsAction;
-use Illuminate\Support\Facades\Route;
-
-Route::get('test', function () {
-    $action = new DeleteOldRecordsAction();
-    $action->execute();
-});
+```neon
+parameters:
+    phpstanCwe:
+        cwe306CriticalOperations:
+            - App\Models\**\*::delete
+            - App\Http\Controllers\**\*Controller::delete*
+            - '!App\Models\Legacy\**\*::delete'
 ```
 
-With `App\Actions\Data\DeleteOldRecordsAction::execute` configured as a
-critical operation, this public route must produce a finding.
+These are PHP symbol patterns, not directory patterns. The model pattern
+selects resolved `delete` calls on classes in `App\Models` and its child
+namespaces. It does not establish that these classes are Eloquent models.
+It does not add support for unresolved Eloquent chains such as
+`User::find($id)->delete()`. The Eloquent detection plan addresses that gap.
 
-Start with direct assignments of named `new` expressions. Support full class
-names and imported names in route closures, controller methods, and supported
-helpers. This does not require Larastan or a new configuration option.
+### 1. Define the matching contract
 
-### Implementation steps
+Use the following initial syntax:
 
-1. Extend `LaravelAuthenticationScanner::flow()` assignment handling. It
-   currently removes the variable's known type. For a direct named `new`
-   expression, replace the previous type with the resolved class instead.
-2. Record the type only after evaluating the assignment expression. Preserve
-   constructor argument evaluation and stopped paths. Do not treat construction
-   as proof of authentication or complete constructor analysis.
-3. Use the existing method-call resolution and critical-operation checks for
-   later calls on that variable. Do not add a separate operation detector.
-4. Replace or remove the stored type on every supported reassignment. Keep
-   variable facts separate between functions, methods, and closures.
-5. Handle branch changes before retaining types across statements. A conditional
-   reassignment must not leave a stale parameter type or make one branch's new
-   type apply to every path. Keep a type after a branch only when the supported
-   analysis establishes it for all continuing paths; otherwise remove it.
-6. Keep dynamic class names, anonymous classes, reference assignments, object
-   aliases, factories, container calls, and property or array targets outside
-   the initial supported scope. Unsupported changes must not preserve a type
-   that can falsely establish authentication.
+| Syntax | Meaning |
+|--------|---------|
+| Literal name | Match the name without regard to case |
+| `*` within an identifier | Match zero or more identifier characters, but not a namespace separator or `::` |
+| `**` as a namespace segment | Match zero or more complete namespace segments |
+| `!` at the start | Exclude matching operations, regardless of list order |
 
-### Questions to resolve
+- Keep exact function and `Class::method` entries valid.
+- Require every wildcard entry to use `Class::method` syntax. Do not add
+  function-name globbing.
+- Require each matched class, namespace, and method identifier to be non-empty
+  and valid. For example, `*Controller` matches `Controller`, but `*` cannot
+  match an empty class name.
+- Allow partial wildcards in namespace, class, and method identifiers.
+  `delete*` matches both `delete` and `deleteAccount`.
+- Permit `**` only as a complete segment before the final class segment.
+  Reject `App\Mod**els\*::delete`, `App\**::delete`, and `Class::**`.
+- Reject adjacent recursive segments, such as `App\**\**\*::delete`, and runs
+  of three or more stars. They add no useful matching behaviour.
+- Do not add `?`, character ranges, brace expansion, regular expressions, or
+  an escape syntax in the first version. Reject unsupported syntax explicitly.
+- Preserve optional leading namespace separators and full-symbol matching.
+  `App\Models` must not also select `App\ModelsExtra`.
+- Keep exclusions stronger than exact names and inclusion patterns. An
+  exclusion-only list must not enable detection.
+- Do not report a configuration error for a valid pattern with no observed
+  matches. Analysed files can contain only part of an application.
 
-1. Should the first version merge equal types across branches, or remove facts
-   for all variables assigned in a branch? Choose a conservative approach and
-   document its limitations.
-2. Should `new self` and `new static` be supported initially? If so, preserve the
-   existing distinction between the declaring class and the runtime receiver.
-3. Should object copies such as `$other = $action` be a separate stage, or use
-   the proposed PHPStan type collector? Do not add partial alias tracking
-   without defining reassignment and reference behaviour.
+Required matching examples:
 
-### Tests and completion criteria
+| Pattern | Operation | Match |
+|---------|-----------|-------|
+| `App\Models\*::delete` | `App\Models\User::delete` | Yes |
+| `App\Models\*::delete` | `App\Models\Admin\User::delete` | No |
+| `App\Models\**\*::delete` | `App\Models\User::delete` | Yes |
+| `App\Models\**\*::delete` | `App\Models\Admin\Audit\User::delete` | Yes |
+| `App\Models\**\*::delete` | `App\ModelsExtra\User::delete` | No |
+| `App\Models\**\*::delete` | `App\Models\User::forceDelete` | No |
+| `App\**\*Controller::delete*` | `App\Http\UserController::deleteAccount` | Yes |
+| `App\**\*Controller::delete*` | `App\Controller::delete` | Yes |
 
-Add positive and negative Pest cases for direct construction, imported and full
-class names, unrelated methods, replacement objects, unknown reassignment,
-separate scopes, and assignments inside branches. Include a typed request
-replaced on one branch to ensure that a stale type cannot establish
-authentication. Test constructor arguments that contain critical calls or stop
-execution.
+### 2. Extend the existing matcher
 
-Check public and authenticated routes, including `auth:sanctum`, and calls
-through controllers and helpers. Confirm the report identifier, operation,
-route line, confidence, and deduplication. Run integration tests through both
-package configuration entry points.
+- Change `CriticalOperationMatcher`. Do not add a second operation matcher,
+  a filesystem glob library, or another route walker.
+- Validate the symbol structure and wildcard tokens before compilation.
+  Distinguish namespace segments, the class segment, and the method segment.
+- Compile each accepted pattern once during construction. Escape literal
+  characters and anchor the complete symbol.
+- Compile recursive segments with their namespace separators. Zero matched
+  segments must not require an extra separator.
+- Keep generated expressions bounded by PHP identifier rules. Do not compile
+  stars into unrestricted `.*` expressions that can cross symbol boundaries.
+- Keep the exact-name lookup and current exact-name report behaviour.
+- Keep the concrete matched operation in reports, not the glob expression.
+- Keep duplicate and overlapping patterns from producing additional findings
+  or changing confidence.
 
-Update the README FAQ and rule limitations when support is available. Run
-`composer format`, then `composer analyse`, and targeted Pest tests with
-`--no-tia`. After the regression batch, run full coverage and mutation checks;
-cap parallel mutation tests at `--processes=16`.
+### 3. Preserve scanner behaviour
 
-The feature is complete when the example above is detected, accepted
-authentication controls stop the finding, and reassignment or branch-local
-facts cannot cause an unsupported authentication guarantee.
+- Use the extended matcher at the existing operation checks. Do not add
+  receiver type resolution, container binding resolution, or execution paths.
+- For resolved inherited bodies, check both the runtime operation and the
+  declaring operation. An exclusion that matches either takes priority.
+- Do not apply a parent declaration match to a child override.
+- For container assignments, match only the requested class and method.
+  Do not follow the requested body or infer a declaring class.
+- Keep route-entry request handling, authentication controls, stopped paths,
+  call depth limits, confidence scores, probability filtering, and ignore
+  reasons unchanged.
+
+### 4. Add tests before implementation
+
+Use Pest datasets for the matcher and regression tests for the scanner:
+
+| Area | Required cases |
+|------|----------------|
+| Compatibility | Existing exact names, whole-segment stars, mixed case, leading separator |
+| Partial names | Prefix, suffix, middle, multiple separated stars, zero matched characters |
+| Recursive namespaces | Zero, one, and several segments; fixed segments after `**`; global namespace |
+| Boundaries | Adjacent namespaces, empty identifiers, invalid identifier starts, extra separators, trailing content |
+| Invalid syntax | Embedded `**`, adjacent `**`, terminal class `**`, method `**`, `***`, `?`, ranges, braces, function globs |
+| Exclusions | Recursive and partial exclusions, either inheritance identity, both list orders, exact inclusion overridden |
+| Reports | Concrete operation, identifier, severity, score, MITRE link, route and operation lines, deduplication |
+| Controls | Public routes, `auth`, `auth:sanctum`, request authorization, logout, unknown middleware |
+| Limits | Inherited bodies, child overrides, unresolved bodies, container assignments, dynamic calls, deferred closures |
+
+Include direct assertions for the user's `App\Models\**\*::delete` example.
+Confirm that it matches direct and nested classes but not `forceDelete`,
+`deleteQuietly`, or unrelated namespaces.
+
+Add integration fixtures through both `extension.neon` and
+`config/cwe306-laravel.neon`. Use pattern-only configuration and recursive
+exclusions. Check that no empty-configuration diagnostic is produced when an
+inclusion pattern is present.
+
+### 5. Document and validate
+
+- Update the README and rule document with the syntax table, the recursive
+  model example, exclusions, and positive and negative matching examples.
+- State that `**` includes zero namespace segments. State that patterns match
+  PHP symbols, not files, and do not prove Eloquent model inheritance.
+- Retain the documented distinction between authentication and permission to
+  delete a particular record.
+- Run `composer format`, then `composer analyse`.
+- Run targeted Pest tests with `--no-tia` during implementation.
+- After the regression batch, run the full coverage and mutation checks.
+  Use the mutation cache during iteration. Use `--no-cache` only when there
+  is a specific need to check each mutation again. Cap parallel mutation
+  testing at `--processes=16` with the required Composer patch applied.
+- Investigate escaped behavioural mutations. Do not suppress them to pass
+  the checks.
+
+### Completion criteria
+
+The feature is complete when the matching table and recursive exclusions work
+through both package configurations, current valid patterns keep their
+behaviour, and invalid syntax fails explicitly. Public routes must report the
+concrete selected operation; accepted authentication controls must stop the
+finding. The feature must not claim to detect unresolved Eloquent delete calls
+or expand the scanner's supported execution paths.
+
+## COMPLETED: Detect configured operations in chained calls
+
+### Goal
+
+Resolve the receiver of a chained method call so the existing critical
+operation matcher can select it. Report the operation only when a supported
+HTTP route reaches it without an accepted authentication control.
+
+Configured chained-call matching is now supported. The steps below record
+the implementation plan. See the rule document for the tested dependency
+combination and the distinction between model and builder operations.
+The supported examples include:
+
+```php
+use App\Models\Issues\ProductIssue;
+use Illuminate\Support\Facades\DB;
+
+ProductIssue::where('created_at', '<', $cutoff)->delete();
+ProductIssue::query()->where('created_at', '<', $cutoff)->delete();
+DB::table('issues')->where('created_at', '<', $cutoff)->delete();
+$factory->createService()->execute();
+```
+
+The first stage supports statically named method calls whose receiver types
+PHPStan can establish. It does not infer a receiver from a method name or the
+first class name in a chain.
+
+### 1. Confirm the current support and define operation identities
+
+- Check the implementation, tests, and public configuration before changing
+  the scanner. The Eloquent section above is marked completed, but its body
+  describes proposed work. Confirm its actual status and correct the status
+  and cross-references as part of implementation.
+- Check PHPStan receiver and method reflection for each example, with and
+  without Larastan. Record which dependency combination resolves each call.
+  Keep Larastan optional unless the supported cases require it.
+- Match the receiver class and the resolved declaring class through
+  `CriticalOperationMatcher`. Preserve exclusion priority and exact-name
+  report behaviour. Do not copy glob matching into the collector.
+- For an Eloquent builder, use its builder identity. For a database query
+  builder, use its query builder identity. Do not present a builder call as
+  `App\Models\Issues\ProductIssue::delete`.
+- Keep any known generic model information as supporting evidence, not an
+  extra operation alias. Mapping builder calls to model patterns requires
+  a separate, documented contract and is outside this stage.
+- For general factory chains, use the resolved returned object's type, not
+  the factory's class. Do not execute factories or resolve container bindings.
+
+Proposed configuration for builder deletes:
+
+```neon
+parameters:
+    phpstanCwe:
+        cwe306CriticalOperations:
+            - Illuminate\Database\Eloquent\Builder::delete
+            - Illuminate\Database\Query\Builder::delete
+```
+
+Existing model patterns remain useful for resolved model calls. They do not
+select builder operations merely because a model started the chain.
+Do not add automatic critical-operation selection or a new configuration
+parameter for this stage. The separate Eloquent detection option must remain
+separate from configured operation matching.
+
+### 2. Collect resolved receiver facts
+
+- Reuse an existing call collector if one is available. Otherwise, add a
+  PHPStan collector for chained method calls, including nullsafe calls.
+  Read the receiver type from `Scope` during the original file analysis.
+- Read method reflection rather than assuming that a fluent method returns
+  its receiver. Respect custom return types, overrides, and builder subclasses.
+- Store serializable facts: file, call start and end positions, method name,
+  receiver and declaring class identities, and evidence completeness.
+  Do not store `Scope`, reflection, type, or AST objects.
+- Define conservative handling for nullable, union, intersection, mixed,
+  and dynamic types before adding support. A model-or-null receiver can
+  identify a possible call; an unrelated union alternative remains uncertain.
+  Do not select one convenient type and treat the evidence as complete.
+- Keep unresolved cases unknown. A known receiver type does not establish
+  that an authentication control is absent or present.
+
+### 3. Join facts to the existing scanner
+
+- Pass collected facts through `Cwe306LaravelRule` to
+  `LaravelAuthenticationScanner`. Register the collector through the shared
+  rule service configuration used by both public entry points.
+- Join facts by file and source positions, not line alone. Confirm that the
+  PHPStan parser and scanner parser provide compatible positions. Test two
+  calls on one line and calls at the same positions in different files.
+- Use a collected fact only at the corresponding call execution point.
+  Preserve receiver evaluation before argument evaluation, and evaluate both
+  before applying the outer operation.
+- Keep the existing route walker. Do not report calls in isolated methods
+  without a supported route, or calls in deferred closures that are not run.
+- Use the existing matcher once for all supported identities of the call.
+  Deduplicate collected and existing syntax-based evidence. Overlapping
+  patterns must not increase confidence or produce duplicate findings.
+- Collected receiver facts select critical operations only. Do not use them
+  to follow arbitrary external bodies or to establish authentication.
+- Preserve request lifecycle handling, middleware, logout, stopped paths,
+  recursion and depth limits, route-level reporting, and inline ignore reasons.
+- Keep incomplete type or execution evidence at lower confidence. Preserve
+  current scores for cases that the scanner already supports.
+
+### 4. Add regression tests before implementation
+
+| Area | Required cases |
+|------|----------------|
+| Eloquent builders | Static `where`, `query()->where`, multiple filters, custom builder subclass |
+| Query builders | `DB::table()->where()->delete`, typed builder chains, unrelated facade |
+| General chains | Typed factory return, inherited method, child override, changed return type |
+| Types | Nullable, nullsafe, mixed, unrelated union member, intersection, unresolved generic |
+| Matching | Builder exact name, recursive glob, declaring-class exclusion, model pattern alone |
+| Order | Critical receiver call, critical argument, stopped receiver or argument, unreachable outer call |
+| Controls | Public route, `auth`, `auth:sanctum`, request authorization, logout, unknown middleware |
+| Paths | Closure route, controller, helper, cross-file call, deferred closure, depth limit |
+| Fact joins | Same-line calls, different files, nested chains, missing or incomplete facts |
+| Reports | Concrete operation, identifier, severity, confidence, MITRE link, route and operation lines, deduplication |
+
+Add real Eloquent and Query Builder integration fixtures for the dependency
+combinations established in step 1. Test doubles alone cannot establish
+support for Laravel's dynamic builder methods. Check both `extension.neon`
+and `config/cwe306-laravel.neon`, and retain tests without Laravel or Larastan.
+
+### 5. Document and validate
+
+- Update the README and rule document with both reported builder examples,
+  working configuration, dependency requirements, and unresolved cases.
+- Explain why model patterns do not select builder calls. State that this
+  feature does not automatically classify every `delete` as critical.
+- Keep authentication separate from permission to delete a particular record.
+- Run `composer format`, then `composer analyse`.
+- Run targeted Pest tests with `--no-tia`, then the full coverage check.
+- Focus cached mutation testing on CWE-306 with `--path=src/Rules/Cwe306`.
+  Keep all tests available. Run full mutation testing only if shared changes
+  can affect other rules. Use `--no-cache` only for a specific need, and cap
+  parallel mutation testing at `--processes=16` with the required patch.
+- Investigate escaped behavioural mutations rather than suppressing them.
+
+### Completion criteria
+
+Both reported Eloquent chains and the Query Builder chain produce findings on
+public routes when their resolved builder operations are configured. Accepted
+authentication controls stop those findings. Model patterns alone do not
+select builder operations. Unrelated or unresolved receivers must not be
+presented as confirmed builder calls. Existing operation matching, exclusions,
+execution order, report format, and both configuration entry points retain
+their documented behaviour.
