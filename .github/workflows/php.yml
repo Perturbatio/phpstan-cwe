@@ -44,5 +44,20 @@ jobs:
     - name: Run tests and check coverage
       run: composer test:coverage:check -- --no-tia --parallel --processes=2
 
+#    - name: Check mutation score
+#      run: composer test:mutation:check -- --no-tia --parallel --processes=2
     - name: Check mutation score
-      run: composer test:mutation:check -- --no-tia --parallel --processes=2
+      shell: bash
+      run: |
+        (
+          while true; do
+            echo "=== Memory usage: $(date -u +%FT%TZ) ==="
+            free -m
+            ps -eo pid,ppid,rss,comm --sort=-rss | head -n 16
+            sleep 15
+          done
+        ) &
+        monitor_pid=$!
+        trap 'kill "$monitor_pid" || true' EXIT
+
+        composer test:mutation:check -- --no-tia --parallel --processes=4
