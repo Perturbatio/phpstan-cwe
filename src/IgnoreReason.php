@@ -10,7 +10,7 @@ use PHPStan\Rules\IdentifierRuleError;
 use PHPStan\Rules\RuleErrorBuilder;
 
 /**
- * A shared utility class to check for @phpstan-ignore annotations and their reasons.
+ * Check PHPStan ignore annotations and their reasons.
  *
  * Limitations: t handles PHP AST comments, not Blade comments, baselines, or global ignoreErrors.
  * A rule should call it once per file, not once per visited node in order to avoid repeated scans and reports.

@@ -95,6 +95,38 @@ Route::post('/accounts/delete', function (AccountService $service): void {
 Both examples require `App\Services\AccountService::deleteAccount` in the
 critical operation list. Request input is not required for a finding.
 
+### Laravel container assignments
+
+The rule also checks direct local assignments from the global `app` helper:
+
+```php
+Route::post('/accounts/delete', function (): void {
+    $service = app(AccountService::class);
+    $service->deleteAccount();
+});
+
+Route::post('/accounts/prune', function (): void {
+    $service = app()->make(AccountService::class);
+    $service->deleteAccount();
+});
+```
+
+Use an imported or full class name with `::class`. Positional and named
+`abstract` arguments are supported. Arguments are checked before the assigned
+receiver can be used. Reassignment and branch limitations are the same as for local
+construction.
+
+The requested class can differ from the actual object because of container
+bindings. The rule therefore checks only an exact configured method on that
+requested class. It does not follow its body or use it to establish a user
+identity or an authentication guarantee. Container calls lower confidence:
+these routes score 80% with confirmed empty middleware, or 40% when middleware
+is unknown.
+
+String or dynamic class arguments, unpacked arguments, direct chained calls,
+other container methods, and calls through a stored container are not supported.
+A local function that replaces `app` is not accepted as Laravel's helper.
+
 ## Accepted controls
 
 - Route middleware, static middleware groups, and nested closure groups.
@@ -171,8 +203,16 @@ enforce. Use the form above to record a reason.
   middleware bodies, middleware groups, service provider changes, or runtime
   middleware configuration. Unknown declarations lower confidence.
 - It follows resolved functions, static methods, `$this` calls, and methods on
-  named parameter types. It does not resolve container bindings, variable
-  callables, traits, local object aliases, property receivers, or all overrides.
+  named parameter types. It also tracks direct local assignments such as
+  `$action = new Action()` with an imported or full class name. It does not
+  resolve container bindings, variable callables, traits, object copies,
+  property receivers, or all overrides.
+- Local object tracking replaces facts on reassignment and removes facts
+  changed inside branches or unsupported statements. It does not merge branch
+  types. Dynamic classes, anonymous classes, `new self`, `new static`,
+  `new parent`, factories, and references are not supported receiver sources.
+  Constructor arguments are checked, but constructor bodies are not followed.
+  Construction alone does not establish authentication.
 - Call depth is limited to 16. Recursion and unresolved calls lower confidence.
 - Simple branches, early returns, throws, exits, and short-circuit expressions
   are supported. Loops, exception handlers, and other complex control flow are

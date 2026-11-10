@@ -202,6 +202,23 @@ configure its full method name, such as
 `App\Services\AccountService::deleteAccount`, and call that method on a typed
 service parameter.
 
+Direct local container assignments are also supported:
+
+```php
+$action = app(DeleteAccount::class);
+$action->__invoke();
+
+$action = app()->make(DeleteAccount::class);
+$action->__invoke();
+```
+
+The class argument must use a literal `Class::class`. The rule checks an exact
+configured method on the requested class at lower confidence. It does not read
+container bindings or follow the requested class body. A binding can return a
+different class, so these assignments cannot establish authentication.
+Dynamic class arguments, other container methods, and direct `$action()` calls
+remain unsupported.
+
 To require authentication for both routes, put them in an authenticated group:
 
 ```php
@@ -370,8 +387,12 @@ For CWE-306, also check that the full `Class::method` name is in
 finding's score, an ignore, or a baseline can hide a report.
 
 The rule must also support the call syntax. It resolves a call such as
-`$action->execute()` on a typed action parameter, but does not yet track the
-class from a local `$action = new Action()` assignment. See the
+`$action->execute()` on a typed action parameter or after a direct local
+`$action = new Action()` assignment. It also checks configured methods after
+`$action = app(Action::class)` or `$action = app()->make(Action::class)`.
+It does not resolve other factory results,
+object copies, or dynamic class names. Types changed inside branches are not
+retained after the branch. See the
 [CWE-306 known limitations](src/Rules/Cwe306/Cwe306LaravelRule.md#known-limitations).
 No report does not prove that the code has an authentication control.
 

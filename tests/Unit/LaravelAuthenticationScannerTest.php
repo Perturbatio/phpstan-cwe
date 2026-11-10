@@ -7,6 +7,224 @@ use PhpParser\ParserFactory;
 
 covers(LaravelAuthenticationScanner::class);
 
+it('detects configured operations requested through the Laravel container', function (string $resolution): void {
+    $source = 'namespace App; use App\AccountService as Service; use Illuminate\Support\Facades\Route; '
+        . "Route::post('/erase', function () { \$service = $resolution; \$service->delete(); });";
+    $reports = scanLaravelAuthentication($source);
+    expect($reports)->toHaveCount(1)
+        ->and($reports[0]['operation'])->toBe('App\AccountService::delete')
+        ->and($reports[0]['probability'])->toBe(80);
+})->with([
+    'app(Service::class)',
+    '\app(\App\AccountService::class)',
+    'app(abstract: Service::class)',
+    'app(Service::CLASS, parameters: [])',
+    'app()->make(Service::class)',
+    'app()->MAKE(abstract: Service::class, parameters: [])',
+]);
+
+it('does not resolve unsupported container syntax or unrelated factories', function (string $resolution): void {
+    $source = 'namespace App; use App\AccountService as Service; use Illuminate\Support\Facades\Route; '
+        . "Route::post('/erase', function () { \$service = $resolution; \$service->delete(); });";
+    expect(scanLaravelAuthentication($source))->toBe([]);
+})->with([
+    'app()',
+    'app("App\\\\AccountService")',
+    'app($class)',
+    'app($class::class)',
+    'app(Service::UNKNOWN)',
+    'app(self::class)',
+    'app(...)',
+    'app(...$arguments)',
+    'app(other: Service::class)',
+    'app()->make()',
+    'app()->make(...)',
+    'app()->make(...$arguments)',
+    'app(Service::class, ...$parameters)',
+    'app()->make(Service::class, ...$parameters)',
+    'app(Service::{$constant})',
+    'app()->{"make"}(Service::class)',
+    'app()->build(Service::class)',
+    'app("container")->make(Service::class)',
+    '$container->make(Service::class)',
+    'other(Service::class)',
+]);
+
+it('does not trust a shadowed app helper', function (string $namespace, string $resolution): void {
+    $source = $namespace . ' use Illuminate\Support\Facades\Route; function app($abstract = null) {} '
+        . "Route::post('/erase', function () { \$service = $resolution; \$service->delete(); });";
+    expect(scanLaravelAuthentication($source))->toBe([]);
+})->with(['', 'namespace App;'])->with([
+    'app(\App\AccountService::class)',
+    'app()->make(\App\AccountService::class)',
+]);
+
+it('resolves imported container helpers without following requested bodies', function (string $resolution): void {
+    $source = 'namespace App; use function app as resolveApp; use Illuminate\Support\Facades\Route; '
+        . "function helper() { \$service = $resolution; \$service->delete(); } "
+        . 'class AccountController { public function destroy() { helper(); } } '
+        . 'Route::post("/erase", [AccountController::class, "destroy"]);';
+    $reports = scanLaravelAuthentication($source, null);
+    expect($reports)->toHaveCount(1)
+        ->and($reports[0]['operation'])->toBe('App\AccountService::delete')
+        ->and($reports[0]['probability'])->toBe(40);
+})->with([
+    'resolveApp(AccountService::class)',
+    'resolveApp()->make(AccountService::class)',
+    '\APP(AccountService::class)',
+]);
+
+it('keeps container receiver facts separate from nested scopes and replacement values', function (string $body, int $count): void {
+    $source = 'namespace App; use Illuminate\Support\Facades\Route; '
+        . "Route::post('/erase', function () { $body });";
+    expect(scanLaravelAuthentication($source))->toHaveCount($count);
+})->with([
+    ['$callback = function () { $service = app(AccountService::class); }; $service->delete();', 0],
+    ['$callback = fn () => ($service = app(AccountService::class)); $service->delete();', 0],
+    ['$service = app(AccountService::class); $copy = $service; $copy->delete();', 0],
+    ['$service = app(AccountService::class); $service->{"delete"}();', 0],
+    ['$service = new OtherService(); $service = app(AccountService::class); $service->delete();', 1],
+    ['$service = app(OtherService::class); $service = new AccountService(); $service->delete();', 1],
+    ['$service = app(AccountService::class); if (true) { $service = null; } $service->delete();', 0],
+    ['$service = app(AccountService::class); $callback = function () use ($service) { $service = null; }; $service->delete();', 1],
+]);
+
+it('does not use a container request as proof of identity', function (string $resolution): void {
+    $source = 'use Illuminate\Support\Facades\Route; '
+        . "Route::post('/erase', function () { \$request = $resolution; if (\$request->user()) { eraseAccounts(); } });";
+    expect(scanLaravelAuthentication($source))->toHaveCount(1);
+})->with([
+    'app(\Illuminate\Http\Request::class)',
+    'app()->make(\Illuminate\Http\Request::class)',
+]);
+
+it('does not enforce a requested container class authentication body', function (): void {
+    $source = <<<'PHP'
+namespace App;
+use Illuminate\Support\Facades\Route;
+class Guard {
+    public function enforce() { if (!\Illuminate\Support\Facades\Auth::check()) { exit; } }
+}
+Route::post('/erase', function () {
+    $guard = app(Guard::class);
+    $guard->enforce();
+    \eraseAccounts();
+});
+PHP;
+    expect(scanLaravelAuthentication($source))->toHaveCount(1);
+});
+
+it('preserves container call ordering and reassignment limits', function (string $body, array $operations): void {
+    $source = 'namespace App; use Illuminate\Support\Facades\Route; '
+        . "Route::post('/erase', function () { $body });";
+    expect(array_column(scanLaravelAuthentication($source), 'operation'))->toBe($operations);
+})->with([
+    ['$service = app(AccountService::class, [\eraseAccounts()]); $service->delete();', ['eraseAccounts', 'App\AccountService::delete']],
+    ['$service = app()->make(AccountService::class, [exit]); $service->delete();', []],
+    ['$service = app(AccountService::class); $service = null; $service->delete();', []],
+    ['if (true) { $service = app(AccountService::class); } $service->delete();', []],
+    ['if (true) { $service = app(AccountService::class); $service->delete(); }', ['App\AccountService::delete']],
+    ['$service = app(AccountService::class); $service->delete(); $service->delete();', ['App\AccountService::delete']],
+]);
+
+it('resolves locally constructed services', function (string $body, int $count): void {
+    $source = 'namespace App; use App\AccountService as Service; use Illuminate\Support\Facades\Route; '
+        . "Route::post('/erase', function () { $body });";
+    $reports = scanLaravelAuthentication($source);
+    expect($reports)->toHaveCount($count);
+    if ($count !== 0) {
+        expect($reports[0]['operation'])->toBe('App\AccountService::delete')
+            ->and($reports[0]['probability'])->toBe(80);
+    }
+})->with([
+    [' $service = new Service(); $service->delete();', 1],
+    [' $service = new \App\AccountService(); $service->delete();', 1],
+    [' $service = new Service(); $service->other();', 0],
+    [' $service = new Service(); $service = null; $service->delete();', 0],
+    [' $service = new OtherService(); $service = new Service(); $service->delete();', 1],
+    [' $service = new Service(); if (true) { $service->delete(); }', 1],
+    [' if (true) { $service = new Service(); $service->delete(); }', 1],
+    [' if (true) { $service = new Service(); } $service->delete();', 0],
+    [' $service = new Service(); if (true) { $service = null; } $service->delete();', 0],
+    [' $service = new Service(); $callback = function () use ($service) { $service = null; }; $service->delete();', 1],
+    [' $service = new Service(); $callback = fn () => ($service = null); $service->delete();', 1],
+    [' $service = new Service(); class Other { public function run() { $service = null; } } $service->delete();', 1],
+    [' $service = new Service(); function unrelated() { $service = null; } $service->delete();', 1],
+    [' $service = new Service(exit); $service->delete();', 0],
+]);
+
+it('does not trust request types changed by conditional or unsupported writes', function (string $body): void {
+    $source = 'use Illuminate\Support\Facades\Route; '
+        . "Route::post('/erase', function (\\Illuminate\\Http\\Request \$request) { $body if (\$request->user()) { eraseAccounts(); } });";
+    expect(scanLaravelAuthentication($source))->toHaveCount(1);
+})->with([
+    'if (true) { $request = new \OtherRequest(); }',
+    'while (true) { $request = new \OtherRequest(); break; }',
+    '$value = ($request = new \OtherRequest());',
+    '$request =& $other;',
+    'unset($request);',
+    '[$request] = [];',
+    'list(, $request) = [];',
+    '$request += 1;',
+    '++$request;',
+    '$request++;',
+    '--$request;',
+    '$request--;',
+    '$$name = null;',
+    'foreach ([] as $request) {}',
+    'foreach ([] as $request => $value) {}',
+]);
+
+it('keeps object assignments separate from deferred and nested scopes', function (string $body): void {
+    $source = 'namespace App; use Illuminate\Support\Facades\Route; '
+        . "Route::post('/erase', function () { $body });";
+    expect(scanLaravelAuthentication($source))->toBe([]);
+})->with([
+    '$callback = function () { $service = new AccountService(); }; $service->delete();',
+    '$callback = fn () => ($service = new AccountService()); $service->delete();',
+    'function helper() { $service = new AccountService(); } $service->delete();',
+    '$service = new $class(); $service->delete();',
+    '$service = new class {}; $service->delete();',
+    '$service = new AccountService(); $copy = $service; $copy->delete();',
+]);
+
+it('invalidates nested writes before an identity predicate', function (string $body): void {
+    $source = 'use Illuminate\Support\Facades\Route; '
+        . "Route::post('/erase', function (\\Illuminate\\Http\\Request \$request) { $body });";
+    expect(scanLaravelAuthentication($source))->toHaveCount(1);
+})->with([
+    'if (($request = other()) && $request->user()) { eraseAccounts(); }',
+    'if (($request = other()) ? ($request->user() && eraseAccounts()) : null) {}',
+    '$value = (($request = other()) ? ($request->user() && eraseAccounts()) : null);',
+    '($request = other()) ? ($request->user() && eraseAccounts()) : null;',
+    '$value = (($request = other()) && $request->user() && eraseAccounts());',
+    '(($request = other()) && $request->user() && eraseAccounts());',
+]);
+
+it('follows locally constructed objects in controllers and helpers', function (): void {
+    $source = <<<'PHP'
+namespace App;
+use Illuminate\Support\Facades\Route;
+function helper() { $service = new AccountService(); $service->delete(); }
+class AccountController {
+    public function destroy() { helper(); }
+}
+Route::post('/erase', [AccountController::class, 'destroy']);
+PHP;
+    expect(scanLaravelAuthentication($source))->toHaveCount(1);
+});
+
+it('checks constructor arguments before tracking the constructed object', function (): void {
+    $reports = scanLaravelAuthentication('namespace App; use Illuminate\Support\Facades\Route; Route::post("/erase", function () { $service = new AccountService(\eraseAccounts()); $service->delete(); });');
+    expect(array_column($reports, 'operation'))->toBe(['eraseAccounts', 'App\AccountService::delete']);
+});
+
+it('does not use a special class name as a local receiver type', function (string $class): void {
+    $source = 'namespace App; use Illuminate\Support\Facades\Route; class AccountService { public function run() { $service = new '
+        . $class . '(); $service->delete(); } } Route::post("/erase", [AccountService::class, "run"]);';
+    expect(scanLaravelAuthentication($source))->toBe([]);
+})->with(['self', 'static', 'parent']);
+
 function scanLaravelAuthentication(string $source, ?array $globalMiddleware = [], array $aliases = []): array
 {
     $parser = (new ParserFactory())->createForNewestSupportedVersion();

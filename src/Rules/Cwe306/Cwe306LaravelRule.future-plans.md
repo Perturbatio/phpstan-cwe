@@ -309,6 +309,16 @@ produce duplicate findings. Invalid patterns must fail explicitly.
 
 ## Track local object types from assignments
 
+Direct named construction is now supported. The first version removes changed
+types after branches; it does not merge them. Object copies and `new self`,
+`new static`, and `new parent` remain outside this support. The steps below
+record the design and the limitations for later work.
+
+Direct assignments from `app(Action::class)` and
+`app()->make(Action::class)` are also supported for exact configured operations.
+The requested class remains uncertain. Container bindings are not resolved,
+and requested class bodies cannot establish authentication.
+
 ### Goal and scope
 
 Resolve calls on objects created in local variables:
@@ -355,12 +365,12 @@ helpers. This does not require Larastan or a new configuration option.
 
 1. Should the first version merge equal types across branches, or remove facts
    for all variables assigned in a branch? Choose a conservative approach and
-   document its limits.
+   document its limitations.
 2. Should `new self` and `new static` be supported initially? If so, preserve the
    existing distinction between the declaring class and the runtime receiver.
 3. Should object copies such as `$other = $action` be a separate stage, or use
    the proposed PHPStan type collector? Do not add partial alias tracking
-   without defining reassignment and reference behavior.
+   without defining reassignment and reference behaviour.
 
 ### Tests and completion criteria
 
@@ -376,7 +386,7 @@ through controllers and helpers. Confirm the report identifier, operation,
 route line, confidence, and deduplication. Run integration tests through both
 package configuration entry points.
 
-Update the README FAQ and rule limits when support is available. Run
+Update the README FAQ and rule limitations when support is available. Run
 `composer format`, then `composer analyse`, and targeted Pest tests with
 `--no-tia`. After the regression batch, run full coverage and mutation checks;
 cap parallel mutation tests at `--processes=16`.

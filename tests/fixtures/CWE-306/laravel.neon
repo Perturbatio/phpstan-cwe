@@ -2,6 +2,8 @@ includes:
     - ../../../config/cwe306-laravel.neon
 
 parameters:
+    scanFiles:
+        - ../shared/laravel-container.php
     phpstanCwe:
         cwe306CriticalOperations:
             - eraseAccounts

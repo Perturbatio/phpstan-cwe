@@ -112,6 +112,18 @@ it('requires a reason with more than one word for Laravel authentication ignores
         ->and(array_column($messages, 'ignorable'))->toBe([false, false]);
 });
 
+it('detects local object calls through both package configurations', function (string $config): void {
+    $result = analyseWithConfig($config, 'tests/fixtures/CWE-306/local-objects.php');
+    $messages = array_values($result['files'])[0]['messages'];
+    expect($result['totals']['file_errors'])->toBe(3)
+        ->and(array_column($messages, 'identifier'))->toBe(array_fill(0, 3, 'phpstanCwe.cwe306'))
+        ->and(array_column($messages, 'line'))->toBe([33, 43, 48])
+        ->and(array_column($messages, 'ignorable'))->toBe([true, true, true])
+        ->and(array_column($messages, 'message'))->toBe(array_fill(0, 3, 'CWE-306: A Laravel route reaches critical operation App\Http\Controllers\UserController::delete without a supported authentication control. Severity: high. Probability: 80%. https://cwe.mitre.org/data/definitions/306.html'))
+        ->and($messages[0]['ignorable'])->toBeTrue()
+        ->and($messages[0]['message'])->toContain('App\Http\Controllers\UserController::delete', 'Severity: high.', 'Probability: 80%.', 'https://cwe.mitre.org/data/definitions/306.html');
+})->with(['tests/fixtures/CWE-306/laravel.neon', 'tests/fixtures/CWE-306/extension.neon']);
+
 it('loads both rules with identifiers and MITRE links', function (): void {
     $result = analyseWithConfig('tests/fixtures/shared/extension.neon');
     $messages = array_values($result['files'])[0]['messages'];

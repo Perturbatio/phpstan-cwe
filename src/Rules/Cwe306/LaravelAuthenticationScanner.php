@@ -19,6 +19,7 @@ use PhpParser\NodeVisitor\NameResolver;
  * @phpstan-type CallableBody array{node: Stmt\ClassMethod|Stmt\Function_, class: string|null, symbol: string}
  * @phpstan-type Operation array{operation: string, operationLine: int}
  * @phpstan-type Finding array{file: string, line: int, operation: string, operationLine: int, probability: int}
+ * @phpstan-type ReceiverType string|array{containerClass: string}
  */
 final class LaravelAuthenticationScanner
 {
@@ -572,7 +573,7 @@ final class LaravelAuthenticationScanner
      *
      * @param array<Stmt> $statements
      * @param list<bool> $states
-     * @param array<string, string> $types
+     * @param array<string, ReceiverType> $types
      * @param list<string> $stack
      * @param list<Operation> $operations
      * @param list<bool> $returns
@@ -585,6 +586,7 @@ final class LaravelAuthenticationScanner
                 return [];
             }
             if ($statement instanceof Stmt\If_) {
+                $this->forgetWrittenTypes($statement->cond, $types);
                 $predicate = $this->predicate($statement->cond, $types);
                 $this->expressions($statement->cond, $states, $types, $stack, $operations, $complete);
                 $trueStates = [];
@@ -605,7 +607,13 @@ final class LaravelAuthenticationScanner
                 // Keep both possible paths. One protected branch does not protect
                 // an operation that is also reachable through the other branch.
                 $states = array_values(array_unique([...$then, ...$else], SORT_REGULAR));
+                // Branch-local assignments do not establish a type on every path.
+                $this->forgetWrittenTypes($statement, $types);
             } elseif ($statement instanceof Stmt\Expression || $statement instanceof Stmt\Return_) {
+                $assignment = $statement->expr;
+                $isDirectAssignment = $assignment instanceof Expr\Assign
+                    && $assignment->var instanceof Expr\Variable && is_string($assignment->var->name);
+                $this->forgetWrittenTypes($isDirectAssignment ? $assignment->expr : $statement, $types);
                 if ($statement->expr !== null) {
                     $this->expressions($statement->expr, $states, $types, $stack, $operations, $complete);
                 }
@@ -617,13 +625,23 @@ final class LaravelAuthenticationScanner
                 if ($statement instanceof Stmt\Return_) {
                     $states = [];
                 }
-                if ($statement->expr instanceof Expr\Assign && $statement->expr->var instanceof Expr\Variable
-                    && is_string($statement->expr->var->name)
+                $this->forgetWrittenTypes($statement, $types);
+                if ($isDirectAssignment && $assignment->expr instanceof Expr\New_
+                    && $assignment->expr->class instanceof Name
+                    && !$assignment->expr->class->isSpecialClassName() && $states !== []
                 ) {
-                    unset($types[$statement->expr->var->name]);
+                    // Save the class only after constructor arguments can execute.
+                    $types[$assignment->var->name] = $assignment->expr->class->toString();
+                } elseif ($isDirectAssignment && $states !== []) {
+                    $containerClass = $this->containerClass($assignment->expr);
+                    if ($containerClass !== null) {
+                        // A binding can replace the requested class. Keep this fact separate.
+                        $types[$assignment->var->name] = ['containerClass' => $containerClass];
+                    }
                 }
             } else {
                 $complete = false;
+                $this->forgetWrittenTypes($statement, $types);
                 // Inspect unsupported statements for operations, but do not use
                 // their control flow to claim that later code requires a user.
                 $unknownStates = $states;
@@ -634,9 +652,67 @@ final class LaravelAuthenticationScanner
         return $states;
     }
 
+    /** @param array<string, ReceiverType> $types */
+    private function forgetWrittenTypes(Node $node, array &$types): void
+    {
+        if ($node instanceof Expr\Closure || $node instanceof Expr\ArrowFunction
+            || $node instanceof Stmt\ClassLike || $node instanceof Stmt\Function_
+        ) {
+            return;
+        }
+        if ($node instanceof Expr\AssignRef) {
+            // References can change more than the assignment target.
+            $types = [];
+            return;
+        }
+        if ($node instanceof Expr\Assign || $node instanceof Expr\AssignOp
+            || $node instanceof Expr\PreInc || $node instanceof Expr\PostInc
+            || $node instanceof Expr\PreDec || $node instanceof Expr\PostDec
+        ) {
+            $this->forgetTargetType($node->var, $types);
+        }
+        if ($node instanceof Stmt\Unset_) {
+            foreach ($node->vars as $variable) {
+                $this->forgetTargetType($variable, $types);
+            }
+        }
+        if ($node instanceof Stmt\Foreach_) {
+            $this->forgetTargetType($node->valueVar, $types);
+            if ($node->keyVar !== null) {
+                $this->forgetTargetType($node->keyVar, $types);
+            }
+        }
+        foreach ($node->getSubNodeNames() as $name) {
+            $children = $node->$name;
+            foreach (is_array($children) ? $children : [$children] as $child) {
+                if ($child instanceof Node) {
+                    $this->forgetWrittenTypes($child, $types);
+                }
+            }
+        }
+    }
+
+    /** @param array<string, ReceiverType> $types */
+    private function forgetTargetType(Expr $target, array &$types): void
+    {
+        if ($target instanceof Expr\Variable) {
+            if (is_string($target->name)) {
+                unset($types[$target->name]);
+            } else {
+                $types = [];
+            }
+        } elseif ($target instanceof Expr\List_) {
+            foreach ($target->items as $item) {
+                if ($item !== null) {
+                    $this->forgetTargetType($item->value, $types);
+                }
+            }
+        }
+    }
+
     /**
      * @param list<bool> $states
-     * @param array<string, string> $types
+     * @param array<string, ReceiverType> $types
      * @param list<string> $stack
      * @param list<Operation> $operations
      */
@@ -734,7 +810,16 @@ final class LaravelAuthenticationScanner
 
                 return;
             }
-            $symbol = $this->callSymbol($node, $types);
+            $containerSymbol = $this->containerCallSymbol($node, $types);
+            $symbol = $containerSymbol ?? $this->callSymbol($node, $types);
+            if ($containerSymbol !== null) {
+                $complete = false;
+                // Only an explicit operation can be checked. Do not execute a
+                // requested class body as if the container binding were known.
+                if (!isset($this->criticalOperations[strtolower($containerSymbol)])) {
+                    return;
+                }
+            }
             if (!$isControl) {
                 if ($symbol === null) {
                     $complete = false;
@@ -776,7 +861,62 @@ final class LaravelAuthenticationScanner
         }
     }
 
-    /** @param array<string, string> $types */
+    private function containerClass(Expr $expression): ?string
+    {
+        $call = $expression;
+        if ($call instanceof Expr\MethodCall && $call->name instanceof Identifier
+            && strtolower($call->name->toString()) === 'make'
+            && $call->var instanceof Expr\FuncCall && !$call->var->isFirstClassCallable()
+            && $call->var->getArgs() === [] && $this->isAppHelper($call->var)
+        ) {
+            $arguments = $call;
+        } elseif ($call instanceof Expr\FuncCall && $this->isAppHelper($call)) {
+            $arguments = $call;
+        } else {
+            return null;
+        }
+        if ($arguments->isFirstClassCallable()) {
+            return null;
+        }
+        foreach ($arguments->getArgs() as $argument) {
+            if ($argument->unpack) {
+                return null;
+            }
+        }
+        $abstract = $this->argument($arguments, 0, 'abstract');
+        if (!$abstract instanceof Expr\ClassConstFetch || !$abstract->class instanceof Name
+            || $abstract->class->isSpecialClassName() || !$abstract->name instanceof Identifier
+            || strtolower($abstract->name->toString()) !== 'class'
+        ) {
+            return null;
+        }
+
+        return $abstract->class->toString();
+    }
+
+    private function isAppHelper(Expr\FuncCall $call): bool
+    {
+        $symbol = $this->callSymbol($call, []);
+
+        return $symbol !== null && strtolower($symbol) === 'app' && !isset($this->callables['app']);
+    }
+
+    /** @param array<string, ReceiverType> $types */
+    private function containerCallSymbol(Expr\CallLike $call, array $types): ?string
+    {
+        if ($call instanceof Expr\MethodCall && $call->name instanceof Identifier
+            && $call->var instanceof Expr\Variable && is_string($call->var->name)
+        ) {
+            $receiver = $types[$call->var->name] ?? null;
+            if (is_array($receiver)) {
+                return $receiver['containerClass'] . '::' . $call->name->toString();
+            }
+        }
+
+        return null;
+    }
+
+    /** @param array<string, ReceiverType> $types */
     private function callSymbol(Expr\CallLike $call, array $types): ?string
     {
         if ($call instanceof Expr\FuncCall && $call->name instanceof Name) {
@@ -793,13 +933,17 @@ final class LaravelAuthenticationScanner
         if ($call instanceof Expr\StaticCall && $call->class instanceof Name && $call->name instanceof Identifier) {
             $class = $call->class->toString();
             if (in_array(strtolower($class), ['self', 'static'], true)) {
-                $class = $types[strtolower($class) === 'self' ? 'self' : 'this'] ?? $class;
+                $receiver = $types[strtolower($class) === 'self' ? 'self' : 'this'] ?? null;
+                if (is_string($receiver)) {
+                    $class = $receiver;
+                }
             }
 
             return $class . '::' . $call->name->toString();
         }
         if ($call instanceof Expr\MethodCall && $call->name instanceof Identifier
             && $call->var instanceof Expr\Variable && is_string($call->var->name) && isset($types[$call->var->name])
+            && is_string($types[$call->var->name])
         ) {
             return $types[$call->var->name] . '::' . $call->name->toString();
         }
@@ -810,7 +954,7 @@ final class LaravelAuthenticationScanner
     /**
      * True means the true branch requires a user. False means the false branch does.
      *
-     * @param array<string, string> $types
+     * @param array<string, ReceiverType> $types
      */
     private function predicate(Expr $expression, array $types): ?bool
     {
@@ -843,7 +987,7 @@ final class LaravelAuthenticationScanner
         };
     }
 
-    /** @param array<string, string> $types */
+    /** @param array<string, ReceiverType> $types */
     private function authMethod(Expr $expression, array $types): ?string
     {
         if ($expression instanceof Expr\StaticCall && $expression->class instanceof Name && $expression->name instanceof Identifier
@@ -862,7 +1006,7 @@ final class LaravelAuthenticationScanner
         return null;
     }
 
-    /** @param array<string, string> $types */
+    /** @param array<string, ReceiverType> $types */
     private function isIdentityRead(Expr $expression, array $types): bool
     {
         if (!$expression instanceof Expr\MethodCall || !$expression->name instanceof Identifier
@@ -878,6 +1022,9 @@ final class LaravelAuthenticationScanner
         }
 
         $class = $types[$expression->var->name];
+        if (!is_string($class)) {
+            return false;
+        }
 
         // A custom user() method can return a value without checking identity.
         // Accept only the supported request method when no local override exists.
