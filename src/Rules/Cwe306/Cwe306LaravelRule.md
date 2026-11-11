@@ -9,8 +9,8 @@ The rule uses PHP syntax trees. It does not start the application or run Artisan
 Laravel is not a package dependency. The supported syntax includes route closures,
 arrow functions, controller actions, and invokable controllers.
 
-See the [future plans](Cwe306LaravelRule.future-plans.md) for proposed Eloquent
-delete detection. These planned checks are not yet available.
+See the [controller group design](Cwe306LaravelRule.future-plans.md) for
+the implementation plan.
 
 ## Configuration
 
@@ -120,6 +120,67 @@ are supported.
 > remain unknown. Do not map a custom or Filament alias to Laravel's class only
 > to stop a finding. An incorrect mapping can hide missing authentication.
 
+### Standard Laravel project example
+
+Use this as a starting point for `phpstan.neon`. It enables all package rules
+and selects common delete operations for CWE-306. Install Larastan separately
+if it is not already present.
+
+```neon
+includes:
+    - vendor/larastan/larastan/extension.neon
+    - vendor/perturbatio/phpstan-cwe/extension.neon
+
+parameters:
+    level: 5
+
+    paths:
+        - app
+        - routes
+
+    phpstanCwe:
+        minProbability: 0
+
+        bladeDirectories:
+            - resources/views
+
+        cwe306CriticalOperations:
+            # Direct model operations.
+            - App\Models\**\*::delete
+            - App\Models\**\*::forceDelete
+            - App\Models\**\*::destroy
+            - App\Models\**\*::forceDestroy
+
+            # Chained builder operations.
+            - Illuminate\Database\Eloquent\Builder::delete
+            - Illuminate\Database\Eloquent\Builder::forceDelete
+            - Illuminate\Database\Query\Builder::delete
+            - Illuminate\Database\Query\Builder::truncate
+
+            # Common application method names.
+            - App\Actions\**\Delete*::execute
+            - App\Actions\**\Delete*::__invoke
+            - App\Actions\**\Prune*::execute
+            - App\Services\**\*::delete*
+            - App\Services\**\*::forceDelete*
+
+        cwe306MiddlewareAliases:
+            auth: Illuminate\Auth\Middleware\Authenticate
+
+        # Keep unknown until you check the effective global middleware.
+        cwe306GlobalMiddleware: null
+```
+
+Adjust the operation patterns to your application. Public operations can be
+valid, and methods with other names need explicit entries. Patterns select
+resolved calls; they do not guarantee full Laravel coverage. A model pattern
+does not select builder operations. See [chained method calls](#chained-method-calls)
+for receiver type requirements and confidence limits.
+
+Set `cwe306GlobalMiddleware: []` only after you confirm that no global
+middleware requires authentication. The standard `auth` and `auth:sanctum`
+route middleware are already recognised.
+
 ## Examples
 
 Unsafe route:
@@ -143,6 +204,59 @@ Route::post('/accounts/delete', function (AccountService $service): void {
 
 Both examples require `App\Services\AccountService::deleteAccount` in the
 critical operation list. Request input is not required for a finding.
+
+### Controller route groups
+
+The rule resolves literal method names in closure groups that declare a
+controller:
+
+```php
+use App\Http\Controllers\Api\V1\ProductController;
+use Illuminate\Support\Facades\Route;
+
+Route::controller(ProductController::class)
+    ->as('products.')
+    ->prefix('products')
+    ->group(function (): void {
+        Route::post('/', 'store')->name('store');
+    });
+```
+
+If `App\Http\Controllers\Api\V1\ProductController::store` is in the
+critical operation list, this route produces a finding unless a supported
+authentication control applies. For example:
+
+```php
+Route::controller(ProductController::class)
+    ->middleware('auth:sanctum')
+    ->group(function (): void {
+        Route::post('/', 'store');
+    });
+```
+
+The rule also supports a literal `controller` attribute in `Route::group()`,
+nested closure groups, and explicit controller handlers. An inner controller
+replaces the outer controller only in its group. Middleware and exclusions
+apply to nested routes. Route exclusions do not remove global middleware.
+
+Ordinary closure groups can also contain explicit controller and closure
+handlers:
+
+```php
+Route::group(['prefix' => 'products'], function (): void {
+    Route::post('/one', [ProductController::class, 'store']);
+    Route::post('/two', function (): void {
+        eraseAccounts();
+    });
+});
+```
+
+Configure each action or function that requires authentication. A method-only
+string does not select a controller action outside a controller group.
+
+Select `store` only if your application requires authentication for that
+operation. Authentication does not prove permission to create a particular
+product.
 
 ### Laravel container assignments
 
@@ -297,7 +411,10 @@ enforce. Use the form above to record a reason.
 
 - This is a first implementation. It does not cover plain PHP scripts.
 - It does not expand resource routes, route macros, route files loaded by
-  `require`, controller groups, dynamic route handlers, or route cache files.
+  `require`, dynamic route handlers, or route cache files. Controller groups
+  require a closure and a literal controller class or full class-name string.
+  Dynamic controllers and method names remain unresolved. It does not resolve
+  group namespaces, container bindings, or registration callbacks.
 - It does not resolve Laravel's static `HasMiddleware` declarations, custom
   middleware bodies, middleware groups, service provider changes, or runtime
   middleware configuration. Unknown declarations lower confidence.

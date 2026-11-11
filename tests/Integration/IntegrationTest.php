@@ -77,6 +77,22 @@ it('loads the Laravel authentication rule with each package configuration', func
         );
 })->with(['tests/fixtures/CWE-306/laravel.neon', 'tests/fixtures/CWE-306/extension.neon']);
 
+it('reports controller group routes through both package configurations', function (string $config): void {
+    $result = analyseWithConfig($config, 'tests/fixtures/CWE-306/controller-groups.php');
+    $file = dirname(__DIR__, 2) . '/tests/fixtures/CWE-306/controller-groups.php';
+    $messages = $result['files'][$file]['messages'];
+
+    expect($result['totals']['file_errors'])->toBe(5)
+        ->and(array_column($messages, 'line'))->toBe([23, 26, 31, 35, 36])
+        ->and(array_column($messages, 'identifier'))->toBe(array_fill(0, 5, 'phpstanCwe.cwe306'))
+        ->and(array_column($messages, 'ignorable'))->toBe(array_fill(0, 5, true))
+        ->and(array_column($messages, 'message'))->toBe(array_map(
+            fn (string $operation): string => 'CWE-306: A Laravel route reaches critical operation ' . $operation
+                . ' without a supported authentication control. Severity: high. Probability: 100%. https://cwe.mitre.org/data/definitions/306.html',
+            ['App\Http\Controllers\UserController::delete', 'App\Http\Controllers\UserController::delete', 'App\Http\Controllers\UserController::delete', 'App\Http\Controllers\UserController::delete', 'eraseAccounts'],
+        ));
+})->with(['tests/fixtures/CWE-306/laravel.neon', 'tests/fixtures/CWE-306/extension.neon']);
+
 it('loads critical operation patterns with each package configuration', function (string $config): void {
     $result = analyseWithConfig($config, 'tests/fixtures/CWE-306/controller.php');
     $messages = array_values($result['files'])[0]['messages'];

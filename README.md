@@ -164,6 +164,10 @@ middleware configuration, supported syntax, and known limitations.
 
 ### Example project configuration
 
+See the [standard Laravel project example](src/Rules/Cwe306/Cwe306LaravelRule.md#standard-laravel-project-example)
+for a configuration with Larastan, model and builder deletes, and common
+action and service patterns.
+
 For example, require authentication before a caller deletes a user or calls an
 account deletion action. Add this to your project's `phpstan.neon`:
 
@@ -297,6 +301,30 @@ Route::middleware('auth:sanctum')->group(function () {
 });
 ```
 
+For a controller group, add the action to the critical operation list only if
+the application requires authentication for that action:
+
+```neon
+parameters:
+    phpstanCwe:
+        cwe306CriticalOperations:
+            - App\Http\Controllers\Api\V1\ProductController::store
+```
+
+```php
+use App\Http\Controllers\Api\V1\ProductController;
+
+Route::controller(ProductController::class)->group(function (): void {
+    Route::post('/products', 'store'); // Report: No supported authentication control.
+});
+
+Route::controller(ProductController::class)->middleware('auth:sanctum')->group(function (): void {
+    Route::post('/products', 'store'); // No report: Authentication is required.
+});
+```
+
+Authentication does not prove permission to create a particular product.
+
 > [!WARNING]
 > CWE-306 checks **authentication**, not permission to delete a specific record.
 > Keep the policy or other authorization check that your application requires.
@@ -328,7 +356,8 @@ A missing or short reason produces a non-ignorable
 
 > [!WARNING]
 > **Route coverage is incomplete.** The rule does not expand resource routes,
-> route macros, controller groups, or dynamic route handlers. Adding `routes/`
+> route macros, dynamic route handlers, or controller groups with dynamic
+> controllers or non-closure registration callbacks. Adding `routes/`
 > to the analysed paths does not mean that every Laravel route is checked.
 > Review unsupported routes separately.
 

@@ -621,7 +621,7 @@ it('keeps unsupported route declarations unknown', function (string $route, int 
     ["Route::post('/erase', fn () => eraseAccounts())->withoutMiddleware(\$middleware);", 1, 60],
     ["Route::post('/erase', fn () => eraseAccounts())->custom();", 1, 60],
     ["Route::group(['middleware' => 'auth', 'prefix' => '/accounts'], function () { Route::post('/erase', fn () => eraseAccounts()); });", 0, null],
-    ["Route::group(['controller' => 'Unknown'], function () { Route::post('/erase', fn () => eraseAccounts()); });", 1, 60],
+    ["Route::group(['controller' => 'Unknown'], function () { Route::post('/erase', fn () => eraseAccounts()); });", 1, 100],
     ["Route::post(action: fn () => eraseAccounts(), uri: '/erase');", 1, 100],
     ["Route::post('/erase', []);", 0, null],
     ["Route::post('/erase', 'MissingController');", 0, null],
@@ -911,8 +911,6 @@ it('keeps unknown group attributes unknown even with a known middleware item', f
     expect($reports)->toHaveCount(1)
         ->and($reports[0]['probability'])->toBe(60);
 })->with([
-    "['controller' => 'Unknown', 'middleware' => []]",
-    "['middleware' => [], 'controller' => 'Unknown']",
     "['middleware' => \$unknown]",
     "['middleware' => [], 0 => 'unknown']",
 ]);
@@ -922,7 +920,7 @@ it('accepts supported group attributes without changing confidence', function (s
 
     expect($reports)->toHaveCount(1)
         ->and($reports[0]['probability'])->toBe(100);
-})->with(["'prefix' => '/accounts'", "'as' => 'accounts.'", "'domain' => 'example.test'", "'where' => []"]);
+})->with(["'prefix' => '/accounts'", "'as' => 'accounts.'", "'domain' => 'example.test'", "'where' => []", "'controller' => 'Unknown'"]);
 
 it('retains the rest of a route chain after an unknown method name', function (): void {
     $source = 'use Illuminate\Support\Facades\Route; Route::post("/erase", fn () => eraseAccounts())->{$method}()->middleware("auth");';

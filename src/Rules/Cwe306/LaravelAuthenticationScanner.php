@@ -91,7 +91,7 @@ final class LaravelAuthenticationScanner
             $this->index($files[$file]);
         }
         foreach ($files as $file => $nodes) {
-            $this->routes($nodes, $file, []);
+            $this->routes($nodes, $file, [], [], null, false);
         }
 
         return $this->findings;
@@ -120,20 +120,26 @@ final class LaravelAuthenticationScanner
     /**
      * @param array<Node> $nodes
      * @param list<string>|null $inheritedMiddleware
+     * @param list<string>|null $inheritedExclusions
+     * @param array{class: string|null}|null $inheritedController
      */
-    private function routes(array $nodes, string $file, ?array $inheritedMiddleware): void
+    private function routes(array $nodes, string $file, ?array $inheritedMiddleware, ?array $inheritedExclusions, ?array $inheritedController, bool $unknownNamespace): void
     {
         foreach ($nodes as $node) {
             if ($node instanceof Stmt\Namespace_) {
-                $this->routes($node->stmts, $file, $inheritedMiddleware);
+                $this->routes($node->stmts, $file, $inheritedMiddleware, $inheritedExclusions, $inheritedController, $unknownNamespace);
             } elseif ($node instanceof Stmt\Expression) {
-                $this->route($node->expr, $file, $inheritedMiddleware);
+                $this->route($node->expr, $file, $inheritedMiddleware, $inheritedExclusions, $inheritedController, $unknownNamespace);
             }
         }
     }
 
-    /** @param list<string>|null $inheritedMiddleware */
-    private function route(Expr $expression, string $file, ?array $inheritedMiddleware): void
+    /**
+     * @param list<string>|null $inheritedMiddleware
+     * @param list<string>|null $inheritedExclusions
+     * @param array{class: string|null}|null $inheritedController
+     */
+    private function route(Expr $expression, string $file, ?array $inheritedMiddleware, ?array $inheritedExclusions, ?array $inheritedController, bool $unknownNamespace): void
     {
         // Read a chain such as Route::post(...)->middleware(...) from left to right.
         // This keeps the route action and its middleware in one request path.
@@ -156,13 +162,16 @@ final class LaravelAuthenticationScanner
             }
         }
         $middleware = $inheritedMiddleware;
-        $excludedMiddleware = [];
+        $excludedMiddleware = $inheritedExclusions;
+        $controller = $inheritedController;
         $handler = null;
         $group = null;
         foreach ($calls as $call) {
             if (!$call->name instanceof Identifier) {
                 // A dynamic method can change the controls. Do not assume an empty list.
                 $middleware = null;
+                $excludedMiddleware = null;
+                $unknownNamespace = true;
                 continue;
             }
             $method = strtolower($call->name->toString());
@@ -175,6 +184,8 @@ final class LaravelAuthenticationScanner
                 if ($removed === null) {
                     $middleware = null;
                 }
+            } elseif ($method === 'controller') {
+                $controller = ['class' => $this->controllerName($this->argument($call, 0, 'controller'))];
             } elseif ($method === 'group') {
                 $group = $this->argument($call, 0, 'callback');
                 if ($group instanceof Expr\Array_) {
@@ -184,22 +195,53 @@ final class LaravelAuthenticationScanner
                         if ($item->key instanceof Scalar\String_ && $item->key->value === 'middleware') {
                             $added = $this->strings($item->value);
                             $middleware = $middleware !== null && $added !== null ? [...$middleware, ...$added] : null;
+                        } elseif ($item->key instanceof Scalar\String_ && $item->key->value === 'controller') {
+                            $controller = ['class' => $this->controllerName($item->value)];
+                        } elseif ($item->key instanceof Scalar\String_ && $item->key->value === 'excluded_middleware') {
+                            $removed = $this->strings($item->value);
+                            $excludedMiddleware = $excludedMiddleware !== null && $removed !== null ? [...$excludedMiddleware, ...$removed] : null;
                         } elseif (!$item->key instanceof Scalar\String_ || !in_array($item->key->value, ['prefix', 'as', 'domain', 'where'], true)) {
                             $middleware = null;
+                            if (!$item->key instanceof Scalar\String_ || $item->key->value === 'namespace') {
+                                $unknownNamespace = true;
+                            }
+                            if (!$item->key instanceof Scalar\String_) {
+                                $excludedMiddleware = null;
+                            }
                         }
                     }
                 }
             } elseif (in_array($method, ['get', 'post', 'put', 'patch', 'delete', 'options', 'any', 'match'], true)) {
                 $handler = $this->argument($call, $method === 'match' ? 2 : 1, 'action');
-            } elseif (!in_array($method, ['name', 'prefix', 'domain', 'where', 'wherenumber', 'whereslug'], true)) {
+            } elseif (!in_array($method, ['as', 'name', 'prefix', 'domain', 'where', 'wherenumber', 'whereslug'], true)) {
                 $middleware = null;
+                $unknownNamespace = true;
             }
         }
         if ($group instanceof Expr\Closure) {
-            $this->routes($group->stmts, $file, $middleware);
+            if ($unknownNamespace) {
+                $controller = ['class' => null];
+            }
+            $this->routes($group->stmts, $file, $middleware, $excludedMiddleware, $controller, $unknownNamespace);
         } elseif ($handler !== null) {
-            $this->checkRoute($handler, $file, $expression->getStartLine(), $middleware, $excludedMiddleware);
+            $this->checkRoute($handler, $file, $expression->getStartLine(), $middleware, $excludedMiddleware, $inheritedController);
         }
+    }
+
+    private function controllerName(?Expr $expression): ?string
+    {
+        if (!$expression instanceof Scalar\String_ && !$expression instanceof Expr\ClassConstFetch) {
+            return null;
+        }
+        $values = $this->strings($expression);
+        $name = $values[0] ?? null;
+        if ($name === null || !preg_match('/^\\\\?[a-zA-Z_\x80-\xff][a-zA-Z0-9_\x80-\xff]*(?:\\\\[a-zA-Z_\x80-\xff][a-zA-Z0-9_\x80-\xff]*)*$/D', $name)
+            || in_array(strtolower($name), ['self', 'static', 'parent'], true)
+        ) {
+            return null;
+        }
+
+        return ltrim($name, '\\');
     }
 
     private function isRouteFacade(Name $name): bool
@@ -264,6 +306,23 @@ final class LaravelAuthenticationScanner
         };
     }
 
+    /** @param list<string> $excludedMiddleware */
+    private function isMiddlewareExcluded(string $middleware, array $excludedMiddleware): bool
+    {
+        $parts = explode(':', $middleware, 2);
+        $class = $this->middlewareClass($middleware);
+        foreach ($excludedMiddleware as $excluded) {
+            $excludedParts = explode(':', $excluded, 2);
+            $excludedClass = $this->middlewareClass($excluded);
+            $resolvedExclusion = $excludedClass . (isset($excludedParts[1]) ? ':' . $excludedParts[1] : '');
+            if ($resolvedExclusion === $class || (isset($parts[1]) && $resolvedExclusion === $class . ':' . $parts[1])) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /**
      * True means authentication is required. False means the list is empty.
      * Null means the list is unknown or contains a control we cannot identify.
@@ -287,22 +346,23 @@ final class LaravelAuthenticationScanner
     /**
      * @param list<string>|null $middleware
      * @param list<string>|null $excludedMiddleware
+     * @param array{class: string|null}|null $controller
      */
-    private function checkRoute(Expr $handler, string $file, int $line, ?array $middleware, ?array $excludedMiddleware): void
+    private function checkRoute(Expr $handler, string $file, int $line, ?array $middleware, ?array $excludedMiddleware, ?array $controller): void
     {
-        $symbol = $this->handlerSymbol($handler);
+        $symbol = $this->handlerSymbol($handler, $controller);
         $body = $symbol === null ? null : $this->body($symbol);
         $controllerMiddleware = $body === null || $body['class'] === null
             ? []
-            : $this->controllerMiddleware($body['class'], explode('::', $symbol)[1], []);
+            : $this->controllerMiddleware(explode('::', $symbol)[0], explode('::', $symbol)[1], []);
         // Route exclusions also apply to controller middleware, but not to global middleware.
         if ($middleware !== null && $excludedMiddleware !== null) {
-            $excludedClasses = array_map($this->middlewareClass(...), $excludedMiddleware);
-            $middleware = array_filter($middleware, fn (string $name): bool => !in_array($this->middlewareClass($name), $excludedClasses, true));
+            $middleware = array_filter($middleware, fn (string $name): bool => !$this->isMiddlewareExcluded($name, $excludedMiddleware));
+        } else {
+            $middleware = null;
         }
         if ($controllerMiddleware !== null && $excludedMiddleware !== null) {
-            $excludedClasses = array_map($this->middlewareClass(...), $excludedMiddleware);
-            $controllerMiddleware = array_filter($controllerMiddleware, fn (string $name): bool => !in_array($this->middlewareClass($name), $excludedClasses, true));
+            $controllerMiddleware = array_filter($controllerMiddleware, fn (string $name): bool => !$this->isMiddlewareExcluded($name, $excludedMiddleware));
         } else {
             $controllerMiddleware = null;
         }
@@ -342,7 +402,8 @@ final class LaravelAuthenticationScanner
         }
     }
 
-    private function handlerSymbol(Expr $handler): ?string
+    /** @param array{class: string|null}|null $controller */
+    private function handlerSymbol(Expr $handler, ?array $controller): ?string
     {
         $values = $this->strings($handler);
         if ($values === null) {
@@ -352,6 +413,17 @@ final class LaravelAuthenticationScanner
             return $values[0] . '::' . $values[1];
         }
         if (count($values) === 1) {
+            if ($handler instanceof Scalar\String_ && !str_contains($values[0], '@') && $controller !== null) {
+                $value = ltrim($values[0], '\\');
+                if (isset($this->classes[strtolower($value)])) {
+                    return $value . '::__invoke';
+                }
+                if (!preg_match('/^[a-zA-Z_\x80-\xff][a-zA-Z0-9_\x80-\xff]*$/D', $value) || $controller['class'] === null) {
+                    return null;
+                }
+
+                return $controller['class'] . '::' . $value;
+            }
             return str_replace('@', '::', $values[0]) . (str_contains($values[0], '@') ? '' : '::__invoke');
         }
 

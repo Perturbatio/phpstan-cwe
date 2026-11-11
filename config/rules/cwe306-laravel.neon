@@ -1,21 +1,28 @@
+# PHPStan loads these services when the CWE-306 Laravel config is included.
+# The collectors store analysis data. The rule uses that data to report findings.
 services:
     -
+        # Record typed chained calls for the authentication scanner.
         class: Perturbatio\PhpstanCwe\Rules\Cwe306\ChainedCallCollector
         tags:
             - phpstan.collector
     -
+        # Record analysed files so the rule can trace routes across files.
         class: Perturbatio\PhpstanCwe\Blade\AnalysedFileCollector
         tags:
             - phpstan.collector
     -
+        # Check routes and call paths against the configured operations and middleware.
         class: Perturbatio\PhpstanCwe\Rules\Cwe306\LaravelAuthenticationScanner
         arguments:
             criticalOperations: %phpstanCwe.cwe306CriticalOperations%
             middlewareAliases: %phpstanCwe.cwe306MiddlewareAliases%
             globalMiddleware: %phpstanCwe.cwe306GlobalMiddleware%
     -
+        # Consume collected data and report findings at the minimum probability score.
         class: Perturbatio\PhpstanCwe\Rules\Cwe306\Cwe306LaravelRule
         arguments:
+            # Use PHPStan's parser for the PHP version under analysis.
             parser: @currentPhpVersionSimpleDirectParser
             minProbability: %phpstanCwe.minProbability%
         tags:
