@@ -120,7 +120,7 @@ Severity describes possible harm. Probability estimates confidence in
 the finding. It is not a measured probability of an attack.
 
 Set `phpstanCwe.minProbability` to filter these reports. The default is
-`0`. Use the rule's error identifier for an inline PHPStan ignore.
+`0`. Use the rule's error identifier for an inline PHPStan ignore annotation.
 CWE-78 ignores must give a reason with at least two words.
 
 ## Known limitations

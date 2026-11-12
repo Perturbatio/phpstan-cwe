@@ -61,7 +61,7 @@ final class Cwe78Rule implements Rule
             $reports = array_merge($reports, $this->reportsForFile($file, $events));
         }
 
-        // An ignore must include a reason with at least two words
+        // An ignore annotation must include a reason with at least two words
         /** @var array<string, list<Cwe78IgnoreEvent|null>> $ignoresByFile */
         $ignoresByFile = $node->get(Cwe78IgnoreCollector::class);
         foreach ($ignoresByFile as $file => $events) {

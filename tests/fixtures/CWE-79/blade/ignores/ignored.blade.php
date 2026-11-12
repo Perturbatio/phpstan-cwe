@@ -23,4 +23,4 @@
 {!! $afterFixedText !!} {{-- Report: The ignore does not apply here. --}}
 {{-- @phpstan-ignore phpstanCwe.cwe79 --}} {!! $first !!} {!! $second !!} {{-- Report: The ignore hides only the first echo. --}}
 @{{-- @phpstan-ignore phpstanCwe.cwe79 --}}
-{!! $afterEscapedComment !!} {{-- Report: The escaped comment is text, not an ignore. --}}
+{!! $afterEscapedComment !!} {{-- Report: The escaped comment above is text, not an ignore annotation. --}}

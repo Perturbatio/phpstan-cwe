@@ -10,6 +10,16 @@ Finding one of these functions is not enough to establish CWE-78. The
 developer must check if data from outside the application can change the
 command or its arguments without correct neutralisation.
 
+It also includes Laravel based input checks via the `request()` helper and input reads from `Illuminate\Http\Request` objects and their subclasses.
+
+<!-- TOC -->
+* [CWE-78: Improper Neutralization of Special Elements used in an OS Command](#cwe-78-improper-neutralization-of-special-elements-used-in-an-os-command)
+  * [Rating](#rating)
+  * [Ignore a finding](#ignore-a-finding)
+  * [Scope for a first version](#scope-for-a-first-version)
+  * [Known limitations](#known-limitations)
+<!-- TOC -->
+
 ## Rating
 
 The rule uses a rating that reflects how much the analysis knows about the
@@ -70,7 +80,7 @@ shell syntax, but it does not stop a value from adding another argument.
 
 ## Ignore a finding
 
-A developer can ignore a finding with an inline PHPStan ignore and a clear
+A developer can ignore a finding with an inline PHPStan ignore annotation and a clear
 reason. A single word is not enough. The rule reports an ignore reason with
 fewer than two words. Explain why the command or its arguments are safe in
 this case.

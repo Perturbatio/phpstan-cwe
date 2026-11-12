@@ -197,9 +197,9 @@ services:
 {!! $trustedHtml !!}
 ```
 
-- An ignore must apply to only one finding. Put it on the same line before
+- An ignore annotation must apply to only one finding. Put it on the same line before
   the finding or on the line before it.
-- Report an ignore that has no matching finding with the identifier
+- Report an ignore annotation that has no matching finding with the identifier
   `phpstanCwe.ignoreUnmatched`.
 - If a rule has an instance ignore, give each report a tip that shows the
   ignore comment. Tell the developer to use it only if they are sure that

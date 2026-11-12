@@ -57,7 +57,7 @@ final class Cwe79BladeRule implements Rule
         $errors = [];
         foreach ($this->scanner->scan($this->directories) as $finding) {
             if ($finding['type'] === 'unmatchedIgnore') {
-                // Tell the user when an ignore comment does not match an echo
+                // Tell the user when an ignore annotation does not match an echo
                 $errors[] = \PHPStan\Rules\RuleErrorBuilder::message('No Blade raw echo matches @phpstan-ignore phpstanCwe.cwe79.')
                     ->identifier('phpstanCwe.ignoreUnmatched')
                     ->file($finding['file'])

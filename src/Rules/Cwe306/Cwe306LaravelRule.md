@@ -9,8 +9,27 @@ The rule uses PHP syntax trees. It does not start the application or run Artisan
 Laravel is not a package dependency. The supported syntax includes route closures,
 arrow functions, controller actions, and invokable controllers.
 
-See the [controller group design](Cwe306LaravelRule.future-plans.md) for
-the implementation plan.
+<!-- TOC -->
+* [CWE-306: Missing authentication for critical function in Laravel](#cwe-306-missing-authentication-for-critical-function-in-laravel)
+  * [Configuration](#configuration)
+    * [Wildcard syntax](#wildcard-syntax)
+      * [Invalid wildcard patterns](#invalid-wildcard-patterns)
+      * [Exclusions](#exclusions)
+      * [Configuration errors](#configuration-errors)
+      * [Scope](#scope)
+    * [Middleware configuration](#middleware-configuration)
+      * [Global middleware](#global-middleware)
+      * [Middleware aliases](#middleware-aliases)
+    * [Standard Laravel project example](#standard-laravel-project-example)
+  * [Examples](#examples)
+    * [Controller route groups](#controller-route-groups)
+    * [Laravel container assignments](#laravel-container-assignments)
+    * [Chained method calls](#chained-method-calls)
+  * [Accepted controls](#accepted-controls)
+  * [Severity and probability](#severity-and-probability)
+  * [Ignore one finding](#ignore-one-finding)
+  * [Known limitations](#known-limitations)
+<!-- TOC -->
 
 ## Configuration
 
@@ -19,14 +38,13 @@ Include the individual configuration instead of `extension.neon`:
 ```neon
 includes:
     - vendor/perturbatio/phpstan-cwe/config/cwe306-laravel.neon
-
 parameters:
     phpstanCwe:
         cwe306CriticalOperations:
-            - App\Services\AccountService::deleteAccount
-            - App\Services\AccountService::exportPrivateData
-        cwe306MiddlewareAliases:
-            members: Illuminate\Auth\Middleware\Authenticate
+            - App\Actions\DeleteAccount::__invoke # action that deletes an account must be protected when called from a route
+            - App\Http\Controllers\**\*Controller::delete* # assuming that delete is about removing a resource and must be protected
+            - App\Http\Controllers\**\*Controller::store* # assuming that store is about creating a resource and must be protected
+            - App\Models\**\*::delete # prevent any direct model delete calls without authentication
 ```
 
 The critical operation list is empty by default. Names are full function names
@@ -51,23 +69,44 @@ parameters:
 `App\Services`. It does not match classes in child namespaces. `*::*` matches
 calls to all methods on those direct child classes.
 
+### Wildcard syntax
+
 | Syntax | Meaning |
 |--------|---------|
 | `*` | Zero or more characters within one identifier |
 | `**` | Zero or more complete namespace segments, before the final class segment |
 | Leading `!` | Exclude matching operations |
 
-The matched identifiers must be valid and non-empty. `*Controller` matches
-`Controller` and `UserController`. `delete*` matches `delete` and
-`deleteAccount`. A partial star cannot cross `\` or `::`.
+The matched identifiers must be valid and non-empty. For example,
+`*Controller` matches `Controller` and `UserController`. `delete*` matches
+`delete` and `deleteAccount`.
 
-`App\Models\**\*::delete` matches `App\Models\User::delete` and
-`App\Models\Admin\Audit\User::delete`. It does not match
-`App\ModelsExtra\User::delete`, `forceDelete`, or `deleteQuietly`.
-`**` includes zero namespace segments. It must be a complete namespace
-segment, not part of an identifier or the final class or method segment.
+A single `*` cannot cross a namespace separator (`\`) or the class-method
+separator (`::`). For example, `App\Services\*Service::delete*` matches
+`App\Services\AccountService::deleteAccount`, but not
+`App\Services\Billing\AccountService::deleteAccount` or
+`App\Services\AccountService::delete\Account`.
+
+The recursive wildcard `**` matches zero or more complete namespace segments.
+For example, `App\Models\**\*::delete` matches both a class directly in
+`App\Models` and classes in its child namespaces:
+
+```text
+App\Models\User::delete
+App\Models\Admin\Audit\User::delete
+```
+
+It does not match `App\ModelsExtra\User::delete`, `forceDelete`, or
+`deleteQuietly`.
+
+#### Invalid wildcard patterns
+The `**` wildcard must be a complete namespace segment. It cannot appear
+inside an identifier or in the final class or method segment.
+
+Invalid examples: `App\Models\**User::delete`, `App\Models\**\User::delete`, `App\Models\**\*::delete*`, `App\Models\**\*::delete?`, `App\Models\**\*::delete{Quietly,Force}`.
+
 Adjacent `**` segments, runs of three stars, `?`, character ranges, brace
-expansion, and wildcard function names are not supported.
+expansion, and wildcard function names are **NOT** supported.
 
 A wildcard entry must use `Class::method` syntax. Patterns only
 match symbols that the scanner resolves. They do not enumerate classes or add
@@ -75,12 +114,15 @@ support for dynamic calls. They match PHP symbols, not directory paths.
 The model pattern does not establish Eloquent inheritance or add support for
 unresolved chains such as `User::find($id)->delete()`.
 
+#### Exclusions
+
 Prefix an inclusion pattern with `!` to exclude its matches. Exclusions take
 priority over matching exact names and inclusion patterns, regardless of list
 order. For an inherited method, the rule checks both the runtime class and the
 class that declares the method. An exclusion that matches either identity
 blocks the operation.
 
+#### Configuration errors
 If the list is empty, the rule reports one configuration error per analysis:
 `phpstanCwe.cwe306Configuration`. It does not scan for critical operations until
 you configure at least one exact operation or inclusion pattern. Exclusion
@@ -91,34 +133,59 @@ The full extension already enables this rule. Include only `extension.neon`
 when you use all rules. Do not also include the individual configuration or
 the rule service file: PHPStan rejects duplicate includes.
 
+#### Scope
 PHPStan must analyse the route files, controller files, form request files, and
 service files together. Bodies in files outside the analysis are unknown.
+
 Include these files in your PHPStan `paths`.
 
-The rule does not read `bootstrap/app.php`, the HTTP kernel, or cached routes to
-build the effective global middleware list. By default,
-`cwe306GlobalMiddleware` is `null`, which means unknown. You can supply the
-effective global middleware list from your application configuration:
+### Middleware configuration
+
+The rule does not read `bootstrap/app.php`, the HTTP kernel, or cached routes.
+It cannot find the global middleware list for your application.
+
+---
+#### Global middleware
+
+`cwe306GlobalMiddleware` sets that list. Its default is `null`, which means the
+list is unknown. Set it to `[]` only when your application has no global
+middleware. Otherwise, list the global middleware names or classes. The rule
+recognises Laravel's `Illuminate\Auth\Middleware\Authenticate` as requiring
+authentication. If the list is not empty and does not contain a recognised
+authentication middleware, the rule treats it as unknown.
+
+Laravel’s Authenticate middleware is not automatically added to cwe306GlobalMiddleware.
+
+* `null` means the global middleware list is unknown.
+* `[]` means the global middleware list is empty.
+* Route middleware auth and auth:sanctum are recognised separately by default.
+
+An alias mapping can change that behaviour. If you map auth to a custom class, the rule no longer resolves it to Laravel’s Authenticate class. Conversely, mapping a custom alias to Illuminate\Auth\Middleware\Authenticate can make the rule treat that middleware as authentication even if it does not provide authentication. Use each alias’s actual class.
+
+---
+
+#### Middleware aliases
+
+`cwe306MiddlewareAliases` maps middleware aliases to class names. Its default
+is `[]`. The rule maps `auth` to
+`Illuminate\Auth\Middleware\Authenticate` by default, so it recognises
+`auth` and `auth:sanctum` without an alias entry. You can map application
+aliases here or override the `auth` mapping. The rule only recognises the
+Laravel `Authenticate` class. Mapping an alias to another class does not make
+that class an authentication control.
 
 ```neon
 parameters:
     phpstanCwe:
-        cwe306GlobalMiddleware: []
+        cwe306GlobalMiddleware:
+            - Illuminate\Cookie\Middleware\EncryptCookies
+            - Illuminate\Auth\Middleware\Authenticate
+        cwe306MiddlewareAliases:
+            members: Illuminate\Auth\Middleware\Authenticate
 ```
 
-Use `[]` only if no global middleware can require authentication. Do not use it
-to omit middleware that you have not checked. An unrecognised middleware class
-or alias remains unknown. Alias configuration must match the application.
-The `auth` alias means Laravel's `Illuminate\Auth\Middleware\Authenticate`
-unless your alias configuration replaces it. Guard names, such as `auth:sanctum`,
-are supported.
-
 > [!WARNING]
-> Map each alias to its actual middleware class. This setting does not declare
-> that a custom class requires authentication. The rule currently recognises
-> only `Illuminate\Auth\Middleware\Authenticate`; custom classes and subclasses
-> remain unknown. Do not map a custom or Filament alias to Laravel's class only
-> to stop a finding. An incorrect mapping can hide missing authentication.
+> Map each alias to its actual class. A wrong mapping can hide a finding.
 
 ### Standard Laravel project example
 
@@ -175,7 +242,7 @@ Adjust the operation patterns to your application. Public operations can be
 valid, and methods with other names need explicit entries. Patterns select
 resolved calls; they do not guarantee full Laravel coverage. A model pattern
 does not select builder operations. See [chained method calls](#chained-method-calls)
-for receiver type requirements and confidence limits.
+for receiver type requirements and confidence limitations.
 
 Set `cwe306GlobalMiddleware: []` only after you confirm that no global
 middleware requires authentication. The standard `auth` and `auth:sanctum`
