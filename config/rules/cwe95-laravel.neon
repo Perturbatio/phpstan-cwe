@@ -1,0 +1,7 @@
+includes:
+    - cwe95.neon
+
+services:
+    phpstanCwe.cwe95Collector:
+        arguments:
+            checkLaravelInput: true

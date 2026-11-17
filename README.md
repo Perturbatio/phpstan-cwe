@@ -87,6 +87,11 @@ Rule configuration files are grouped as follows:
 | `config/parameters.neon` | Shared defaults and parameter schema. |
 | `config/rules/` | Internal rule and collector service definitions. |
 
+Use `config/cwe95.neon` to check PHP evaluation of PHP code including user provided input. Use
+`config/cwe95-laravel.neon` to also check Laravel request input. See the
+[CWE-95 rule document](src/Rules/Cwe95/Cwe95Rule.md) for ratings, limitations,
+and fingerprint-based ignores.
+
 If your project does not use Laravel, select the rules you need instead of
 including the full extension.
 

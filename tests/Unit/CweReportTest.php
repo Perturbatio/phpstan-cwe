@@ -28,6 +28,24 @@ it('keeps severity, score, link, and identifier in the report', function (): voi
         ]);
 });
 
+it('adds fingerprint text and metadata only when a fingerprint is supplied', function (?string $fingerprint): void {
+    $report = CweReport::make(95, 'Review eval().', 'high', 95, fingerprint: $fingerprint);
+    $expectedMetadata = [
+        'cwe' => 95,
+        'severity' => 'high',
+        'probability' => 95,
+        'url' => 'https://cwe.mitre.org/data/definitions/95.html',
+    ];
+    $expectedMessage = 'CWE-95: Review eval(). Severity: high. Probability: 95%.';
+    if ($fingerprint !== null) {
+        $expectedMetadata['fingerprint'] = $fingerprint;
+        $expectedMessage .= ' Fingerprint: ' . $fingerprint . '.';
+    }
+
+    expect($report->getMessage())->toBe($expectedMessage . ' https://cwe.mitre.org/data/definitions/95.html')
+        ->and($report->getMetadata())->toBe($expectedMetadata);
+})->with([null, '', str_repeat('a', 64)]);
+
 it('sets the template file and line when a rule scans a separate file', function (): void {
     $file = __DIR__ . '/../fixtures/CWE-79/blade/views/home.blade.php';
     $report = CweReport::make(79, 'Blade raw output.', 'high', 80, $file, 7);

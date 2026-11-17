@@ -11,6 +11,10 @@ use Perturbatio\PhpstanCwe\Rules\Cwe79\Cwe79Rule;
 use Perturbatio\PhpstanCwe\Rules\Cwe78\Cwe78Collector;
 use Perturbatio\PhpstanCwe\Rules\Cwe78\Cwe78IgnoreCollector;
 use Perturbatio\PhpstanCwe\Rules\Cwe78\Cwe78Rule;
+use Perturbatio\PhpstanCwe\Rules\Cwe95\Cwe95Collector;
+use Perturbatio\PhpstanCwe\Rules\Cwe95\Cwe95Fingerprint;
+use Perturbatio\PhpstanCwe\Rules\Cwe95\Cwe95IgnoreCollector;
+use Perturbatio\PhpstanCwe\Rules\Cwe95\Cwe95Rule;
 use Perturbatio\PhpstanCwe\Rules\Cwe89\Cwe89LaravelCollector;
 use Perturbatio\PhpstanCwe\Rules\Cwe89\Cwe89LaravelRule;
 use Perturbatio\PhpstanCwe\Rules\Cwe89\Cwe89Rule;
@@ -27,6 +31,10 @@ covers(
     Cwe78Collector::class,
     Cwe78IgnoreCollector::class,
     Cwe78Rule::class,
+    Cwe95Collector::class,
+    Cwe95Fingerprint::class,
+    Cwe95IgnoreCollector::class,
+    Cwe95Rule::class,
     Cwe89LaravelCollector::class,
     Cwe89LaravelRule::class,
     Cwe89Rule::class,
@@ -36,7 +44,7 @@ function analyseWithConfig(string $config, string $fixture = 'tests/fixtures/sha
 {
     $root = dirname(__DIR__, 2);
     $process = proc_open(
-        [PHP_BINARY, $root . '/vendor/bin/phpstan', 'analyse', $root . '/' . $fixture,
+        [PHP_BINARY, $root . '/vendor/bin/phpstan', 'analyse', str_starts_with($fixture, '/') ? $fixture : $root . '/' . $fixture,
             '--configuration=' . $root . '/' . $config, '--level=0', '--no-progress', '--error-format=json'],
         [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
         $pipes,
@@ -244,6 +252,137 @@ it('loads a single rule when selected', function (): void {
 
     expect(array_column($messages, 'identifier'))->toBe(['phpstanCwe.cwe89']);
 });
+
+it('loads the CWE-95 rule from its PHP configuration and the full extension', function (string $config): void {
+    $result = analyseWithConfig($config, 'tests/fixtures/CWE-95/cwe95.php');
+    $messages = array_values($result['files'])[0]['messages'];
+
+    expect($result['totals']['file_errors'])->toBe(6)
+    ->and(array_column($messages, 'identifier'))->toBe(array_fill(0, 6, 'phpstanCwe.cwe95'))
+    ->and(array_column($messages, 'line'))->toBe([5, 7, 8, 10, 13, 15])
+    ->and(array_column($messages, 'ignorable'))->toBe(array_fill(0, 6, true))
+    ->and($messages[0]['message'])->toContain(
+        'Severity: high.',
+        'Probability: 95%.',
+        'Fingerprint: ',
+        'https://cwe.mitre.org/data/definitions/95.html',
+    );
+})->with([
+    'config/cwe95.neon',
+    'tests/fixtures/shared/extension.neon',
+]);
+
+it('loads Laravel request input from the CWE-95 Laravel configuration', function (): void {
+    $result = analyseWithConfig('config/cwe95-laravel.neon', 'tests/fixtures/CWE-95/laravel.php');
+    $messages = array_values($result['files'])[0]['messages'];
+
+    expect($result['totals']['file_errors'])->toBe(2)
+    ->and(array_column($messages, 'identifier'))->toBe(array_fill(0, 2, 'phpstanCwe.cwe95'))
+    ->and(array_column($messages, 'line'))->toBe([7, 9])
+    ->and(array_column($messages, 'message')[0])->toContain('Probability: 95%.')
+    ->and(array_column($messages, 'message')[1])->toContain('Probability: 90%.');
+});
+
+it('reports a stale CWE-95 fingerprint ignore', function (): void {
+    $result = analyseWithConfig('config/cwe95.neon', 'tests/fixtures/CWE-95/stale-ignore.php');
+    $messages = array_values($result['files'])[0]['messages'];
+
+    expect($result['totals']['file_errors'])->toBe(1)
+    ->and(array_column($messages, 'identifier'))->toBe([
+        'phpstanCwe.ignoreUnmatched',
+    ])
+    ->and(array_column($messages, 'line'))->toBe([5]);
+});
+
+it('keeps closure fingerprints and ratings stable across PHPStan runs', function (string $config): void {
+    $first = analyseWithConfig($config, 'tests/fixtures/CWE-95/closures.php');
+    $messages = array_values(array_filter(
+        array_values($first['files'])[0]['messages'],
+        static fn (array $message): bool => $message['identifier'] === 'phpstanCwe.cwe95',
+    ));
+
+    expect(array_column($messages, 'line'))->toBe([7, 9, 13, 18, 21, 24, 26, 29]);
+    foreach ([95, 90, 60, 60, 60, 90, 60, 90] as $index => $probability) {
+        expect($messages[$index]['message'])->toContain("Probability: {$probability}%.");
+    }
+    expect(array_unique(array_column($messages, 'message')))->toHaveCount(7);
+    expect($messages[7]['message'])->toBe($messages[5]['message']);
+
+    for ($run = 0; $run < 2; $run++) {
+        $next = analyseWithConfig($config, 'tests/fixtures/CWE-95/closures.php');
+        expect($next)->toBe($first);
+    }
+})->with(['config/cwe95-laravel.neon', 'tests/fixtures/shared/extension.neon']);
+
+it('keeps closure ignores valid after comments and blank lines change', function (string $config): void {
+    $fixture = tempnam(sys_get_temp_dir(), 'phpstan-cwe95-');
+    if ($fixture === false) {
+        throw new RuntimeException('Cannot create a temporary PHP fixture.');
+    }
+
+    try {
+        $code = file_get_contents(__DIR__ . '/../fixtures/CWE-95/closures.php');
+        file_put_contents($fixture, $code);
+        $first = analyseWithConfig($config, $fixture);
+        $messages = array_values(array_filter(
+            array_values($first['files'])[0]['messages'],
+            static fn (array $message): bool => $message['identifier'] === 'phpstanCwe.cwe95',
+        ));
+        expect($messages)->toHaveCount(8)
+            ->and(analyseWithConfig($config, $fixture))->toBe($first);
+
+        $withIgnores = str_replace(
+            ["    eval(request('code_2'));", '    eval($code); // Report: Assigned'],
+            [
+                '    ' . substr($messages[0]['tip'], strpos($messages[0]['tip'], '// @phpstan-cwe-ignore')) . "\n    eval(request('code_2'));",
+                '    ' . substr($messages[1]['tip'], strpos($messages[1]['tip'], '// @phpstan-cwe-ignore')) . "\n    eval(\$code); // Report: Assigned",
+            ],
+            $code,
+        );
+        $withIgnores = str_replace('(<reason>)', '(Reviewed local code)', $withIgnores);
+        $withIgnores = str_replace("<?php\n", "<?php\n\n// Extra review comment.\n\n", $withIgnores);
+        file_put_contents($fixture, $withIgnores);
+
+        $ignored = analyseWithConfig($config, $fixture);
+        $remaining = array_values($ignored['files'])[0]['messages'];
+        expect(array_column($remaining, 'identifier'))->not->toContain('phpstanCwe.ignoreUnmatched');
+        $remainingFindings = array_values(array_filter(
+            $remaining,
+            static fn (array $message): bool => $message['identifier'] === 'phpstanCwe.cwe95',
+        ));
+        expect(array_column($remainingFindings, 'message'))->toBe(array_column(array_slice($messages, 2), 'message'))
+            ->and(analyseWithConfig($config, $fixture))->toBe($ignored);
+
+        file_put_contents($fixture, str_replace("\$request->input('code')", "\$request->input('changed')", $withIgnores));
+        $changed = analyseWithConfig($config, $fixture);
+        expect(array_column(array_values($changed['files'])[0]['messages'], 'identifier'))
+            ->toContain('phpstanCwe.ignoreUnmatched', 'phpstanCwe.cwe95');
+    } finally {
+        unlink($fixture);
+    }
+})->with(['config/cwe95-laravel.neon', 'tests/fixtures/shared/extension.neon']);
+
+it('reports missing CWE-95 ignore reasons and shows a copyable ignore tip', function (string $config): void {
+    $result = analyseWithConfig($config, 'tests/fixtures/CWE-95/missing-ignore-reason.php');
+    $messages = array_values($result['files'])[0]['messages'];
+    $reasonErrors = array_values(array_filter($messages, static fn (array $message): bool => $message['identifier'] === 'phpstanCwe.ignoreReason'));
+    $findings = array_values(array_filter($messages, static fn (array $message): bool => $message['identifier'] === 'phpstanCwe.cwe95'));
+
+    expect(array_column($messages, 'identifier'))->not->toContain('ignore.parseError')
+        ->and($reasonErrors)->toHaveCount(1)
+        ->and($reasonErrors[0]['message'])->toBe('CWE-95 ignore requires a reason with at least two words.')
+        ->and($reasonErrors[0]['line'])->toBe(5)
+        ->and($findings)->toHaveCount(1)
+        ->and($findings[0]['line'])->toBe(6);
+
+    preg_match('/Fingerprint: ([a-f0-9]{64})\./', $findings[0]['message'], $matches);
+
+    expect($matches)->toHaveCount(2)
+        ->and($findings[0]['tip'])->toContain(
+            'Only ignore this finding if you have checked that the evaluated code is safe.',
+            sprintf('// @phpstan-cwe-ignore phpstanCwe.cwe95[%s] (<reason>)', $matches[1]),
+        );
+})->with(['config/cwe95.neon', 'tests/fixtures/shared/extension.neon']);
 
 it('checks Laravel request input at HTML output with both package configurations', function (string $config): void {
     $result = analyseWithConfig($config, 'tests/fixtures/CWE-79/laravel.php');

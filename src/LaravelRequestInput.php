@@ -19,6 +19,7 @@ final class LaravelRequestInput
     {
     }
 
+    /** @phpstan-assert-if-true Expr $node */
     public function isInput(Node $node, Scope $scope): bool
     {
         if ($node instanceof Expr\FuncCall) {

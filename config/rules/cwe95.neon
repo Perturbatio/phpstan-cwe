@@ -1,0 +1,15 @@
+services:
+    phpstanCwe.cwe95Collector:
+        class: Perturbatio\PhpstanCwe\Rules\Cwe95\Cwe95Collector
+        tags:
+            - phpstan.collector
+    -
+        class: Perturbatio\PhpstanCwe\Rules\Cwe95\Cwe95IgnoreCollector
+        tags:
+            - phpstan.collector
+    -
+        class: Perturbatio\PhpstanCwe\Rules\Cwe95\Cwe95Rule
+        arguments:
+            minProbability: %phpstanCwe.minProbability%
+        tags:
+            - phpstan.rules.rule
