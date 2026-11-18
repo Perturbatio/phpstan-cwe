@@ -82,6 +82,7 @@ final class Cwe95Collector implements Collector
      * @param  Node  $node
      * @param  Scope  $scope
      * @return Cwe95Event|null
+     * @throws ShouldNotHappenException
      */
     public function processNode(Node $node, Scope $scope): ?array
     {

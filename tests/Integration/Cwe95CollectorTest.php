@@ -16,20 +16,20 @@ uses(PHPStanTestCase::class);
 
 covers(Cwe95Collector::class);
 
-it('records the text of an unknown method assignment without recording a request source', function (): void {
+it('records the text of an unknown method assignment without recording a request source', function (string $operator): void {
     $provider = $this->createStub(ReflectionProvider::class);
     $scope = $this->createStub(Scope::class);
     $scope->method('getType')->willReturn(new MixedType());
     $collector = new Cwe95Collector($provider, true);
     $statements = (new ParserFactory())->createForHostVersion()->parse(
-        '<?php $code = $request?->input(/* Review the key. */ "codes*2");',
+        '<?php $code = $request' . $operator . 'input(/* Review the key. */ "codes*2");',
     );
     $event = $collector->processNode($statements[0]->expr, $scope);
 
-    expect($event['unknownMethodCall'])->toBe('$request?->input("codes*2")')
+    expect($event['unknownMethodCall'])->toBe('$request' . $operator . 'input("codes*2")')
         ->and($event['sources'])->toBe([])
         ->and($event['unknown'])->toBeTrue();
-});
+})->with(['->', '?->']);
 
 it('collects eval expression facts without treating transformations as protection', function (
     string $expression,
@@ -78,6 +78,7 @@ it('collects eval expression facts without treating transformations as protectio
     'array items' => ['["code" => $_COOKIE["code"], null]', ['php:$_COOKIE["code"]'], false, []],
     'property' => ['$object->code', [], true, ['object']],
     'nullsafe property' => ['$object?->code', [], true, ['object']],
+    'unknownMethodCall' => ['$unknownObject->someMethod()', [], true, ['unknownObject']],
     'repeated dependencies' => ['$code . $code', [], false, ['code']],
     'helper with Laravel input checks disabled' => ['request("code")', [], true, []],
     'helper with Laravel input checks enabled' => ['request("code")', ['laravel:request("code")'], false, [], true],

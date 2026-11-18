@@ -90,7 +90,7 @@ it('collects nothing from expressions and statements without matching comments',
     $collector = new CweIgnoreCollector();
     $plain = new Expression(new Variable('a'), ['comments' => [new Comment('// other')]]);
 
-    expect($collector->processNode(new Variable('a', ['comments' => [new Comment('// @phpstan-ignore phpstanCwe.cwe78')]]), $scope))->toBeNull()
+    expect($collector->processNode(new Variable('a', ['comments' => [new Comment('// @phpstan-ignore phpstanCwe.cwe78.' . str_repeat('a', 64) . ' (Reviewed input)')]]), $scope))->toBeNull()
         ->and($collector->processNode($plain, $scope))->toBeNull()
         ->and($collector->getNodeType())->toBe(PhpParser\Node::class);
 });

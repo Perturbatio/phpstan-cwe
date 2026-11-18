@@ -298,6 +298,31 @@ it('resolves source facts with exact dependency and assignment states', function
     'direct sink' => [['sources' => ['request']], [], false, ['sources' => ['request'], 'unknown' => false, 'throughAssignment' => false]],
     'direct assignment' => [['sources' => ['request']], [], true, ['sources' => ['request'], 'unknown' => false, 'throughAssignment' => true]],
     'fixed assignment' => [[], [], true, ['sources' => [], 'unknown' => false, 'throughAssignment' => false]],
+    'unknown method assignment' => [
+        ['kind' => 'assignment', 'variable' => 'code', 'unknown' => true, 'unknownMethodCall' => '$provider->read("key")'],
+        [],
+        true,
+        [
+            'sources' => [],
+            'unknown' => true,
+            'throughAssignment' => false,
+            'unknownMethodCalls' => ['$provider->read("key")'],
+        ],
+    ],
+    'merges method calls without duplicates or gaps' => [
+        ['variables' => ['first', 'second']],
+        [
+            'first' => ['sources' => [], 'unknown' => true, 'throughAssignment' => false, 'unknownMethodCalls' => ['$provider->read("z")']],
+            'second' => ['sources' => [], 'unknown' => true, 'throughAssignment' => false, 'unknownMethodCalls' => ['$provider->read("z")', '$provider->read("a")']],
+        ],
+        false,
+        [
+            'sources' => [],
+            'unknown' => true,
+            'throughAssignment' => false,
+            'unknownMethodCalls' => ['$provider->read("z")', '$provider->read("a")'],
+        ],
+    ],
     'missing then present' => [
         ['variables' => ['missing', 'code']],
         ['code' => ['sources' => ['request'], 'unknown' => false, 'throughAssignment' => false]],
@@ -329,6 +354,22 @@ it('resolves source facts with exact dependency and assignment states', function
         ['sources' => [], 'unknown' => false, 'throughAssignment' => true],
     ],
 ]);
+
+it('includes unknown method calls in the fingerprint in sorted order', function (): void {
+    $firstCall = '$provider->read("z")';
+    $secondCall = '$provider->read("a")';
+    $sink = cwe95Event(['expression' => 'eval($first . $second)', 'variables' => ['first', 'second']]);
+    $errors = $this->processEvents([
+        cwe95Event(['kind' => 'assignment', 'offset' => 5, 'variable' => 'first', 'unknown' => true, 'unknownMethodCall' => $firstCall]),
+        cwe95Event(['kind' => 'assignment', 'offset' => 10, 'variable' => 'second', 'unknown' => true, 'unknownMethodCall' => $secondCall]),
+        $sink,
+    ]);
+
+    expect($errors)->toHaveCount(1)
+        ->and($errors[0]->getMetadata()['fingerprint'])->toBe(CweFingerprint::make(95, [
+            $sink['file'], $sink['scope'], $sink['expression'], '', $secondCall, $firstCall,
+        ]));
+});
 
 it('keeps direct input rating when a sink also has an assigned input', function (): void {
     $errors = $this->processEvents([
