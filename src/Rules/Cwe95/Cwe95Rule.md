@@ -60,11 +60,46 @@ The [shared ignore guide](../../Ignore/CweIgnore.md) describes the syntax for al
 
 Each report includes a SHA-256 fingerprint. The fingerprint uses the rule
 identifier, file path, function or method name, closure position in source
-order, normalised `eval()` expression, and detected input sources.
+order, normalised `eval()` expression, and detected input sources. 
+
+It also
+uses the text of method calls that assign an unknown value to a local
+variable that reaches `eval()`. A change to an argument of such a call
+changes the fingerprint. 
+
+This does not identify the call as request input.
+PHPStan must identify the receiver as a Laravel request for the rule to
+classify the call as Laravel input.
+
 It does not use a line number or token position. Comments and blank lines
 do not change the fingerprint. A detected input source change
-creates a different fingerprint. A file rename also creates a different
+creates a different fingerprint. 
+
+A file rename also creates a different
 fingerprint. If you add, remove, or move a closure, review its ignore annotations again.
+
+> [!WARNING]
+> This rule would not detect a new fingerprint in a request call with the following scenario:
+> 
+> Starting code:
+> ```PHP    
+> $valueAsKey = 'another-key';
+> $code = $request->only(['key', 'some-other-key', $valueAsKey]);
+> eval($code);
+> ```
+> 
+> Ignored and then modified code:
+> ```PHP    
+> $valueAsKey = 'a-different-key';
+> $code = $request->only(['key', 'some-other-key', $valueAsKey]);
+> // @phpstan-ignore phpstanCwe.cwe95.d91dc155f6ee1b8b0d2c653e8b56cf2b4cea8984f9c8cc4b5439896846104d57 (a valid reason)
+> eval($code);
+> ```
+> If the $valueAsKey variable is changed, that is not tracked so does not change the fingerprint.
+> 
+> It's not common to do something like this, but it does demonstrate the current limitations of fingerprinting.
+> 
+> Use of eval is not advised anyway, try to find an alternative solution.
 
 Each finding has a tip with a copyable ignore comment and its fingerprint.
 Only use the ignore after you check that the evaluated code is safe. Replace

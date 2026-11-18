@@ -19,6 +19,7 @@ use PHPStan\Rules\Rule;
  * @phpstan-import-type Cwe95Event from Cwe95Collector
  * @phpstan-import-type Cwe95FlowEvent from Cwe95Collector
  * @phpstan-import-type CweIgnoreEvent from CweIgnoreCollector
+ * @phpstan-type Cwe95Facts array{sources: list<string>, unknown: bool, throughAssignment: bool, unknownMethodCalls?: non-empty-list<string>}
  * @implements Rule<CollectedDataNode>
  */
 final class Cwe95Rule implements Rule
@@ -94,11 +95,14 @@ final class Cwe95Rule implements Rule
         foreach (LocalAssignmentFlow::sinks($this->isolateClosureScopes($events), $this->resolveFacts(...)) as [$event, $facts]) {
             $sources = $facts['sources'];
             sort($sources);
+            $unknownMethodCalls = $facts['unknownMethodCalls'] ?? [];
+            sort($unknownMethodCalls);
             $fingerprint = CweFingerprint::make(95, [
                 $file,
                 $event['scope'],
                 $event['expression'],
                 implode('|', $sources),
+                ...$unknownMethodCalls,
             ]);
             if ($ignoreSet->suppressesAt($fingerprint, $event['offset'])) {
                 continue;
@@ -165,14 +169,17 @@ final class Cwe95Rule implements Rule
 
     /**
      * @param Cwe95FlowEvent $event
-     * @param array<string, array{sources: list<string>, unknown: bool, throughAssignment: bool}> $variables
-     * @return array{sources: list<string>, unknown: bool, throughAssignment: bool}
+     * @param array<string, Cwe95Facts> $variables
+     * @return Cwe95Facts
      */
     private function resolveFacts(array $event, array $variables, bool $isAssignment): array
     {
         $sources = $event['sources'];
         $unknown = $event['unknown'];
         $throughAssignment = false;
+        $unknownMethodCalls = $event['kind'] === 'assignment' && isset($event['unknownMethodCall'])
+            ? [$event['unknownMethodCall']]
+            : [];
         foreach ($event['variables'] as $variable) {
             $variableFacts = $variables[$variable] ?? null;
             if ($variableFacts === null) {
@@ -181,6 +188,7 @@ final class Cwe95Rule implements Rule
             }
 
             $sources = array_values(array_unique(array_merge($sources, $variableFacts['sources'])));
+            $unknownMethodCalls = array_values(array_unique(array_merge($unknownMethodCalls, $variableFacts['unknownMethodCalls'] ?? [])));
             $unknown = $unknown || $variableFacts['unknown'];
             if ($variableFacts['sources'] !== []) {
                 $throughAssignment = true;
@@ -196,6 +204,7 @@ final class Cwe95Rule implements Rule
             'sources' => $sources,
             'unknown' => $unknown,
             'throughAssignment' => $throughAssignment,
+            ...($unknownMethodCalls === [] ? [] : ['unknownMethodCalls' => $unknownMethodCalls]),
         ];
     }
 

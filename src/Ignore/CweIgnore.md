@@ -59,7 +59,7 @@ change it.
 | CWE-79 PHP | Function or method name and printed expression |
 | CWE-79 Blade | Normalised raw echo expression |
 | CWE-89 | Function or method name, sink expression, and the kind (direct or Laravel). Laravel findings also use the status of the value |
-| CWE-95 | Function or method name, closure position, `eval()` expression, and input sources |
+| CWE-95 | Function or method name, closure position, `eval()` expression, input sources, and method calls that assign unknown values that reach `eval()` |
 | CWE-306 | Route method and arguments (not the handler), handler, and critical operation |
 
 ## Limitations

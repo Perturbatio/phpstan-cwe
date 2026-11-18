@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Perturbatio\PhpstanCwe\Rules\Cwe95;
 
+use Perturbatio\PhpstanCwe\Ignore\ExpressionText;
 use Perturbatio\PhpstanCwe\LaravelRequestInput;
 use PhpParser\Node;
 use PhpParser\Node\Expr;
@@ -25,6 +26,7 @@ use PHPStan\ShouldNotHappenException;
  *     offset: int,
  *     startOffset: int,
  *     variable: string,
+ *     unknownMethodCall?: string,
  *     sources: list<string>,
  *     unknown: bool,
  *     variables: list<string>
@@ -98,6 +100,9 @@ final class Cwe95Collector implements Collector
             $facts = $this->expressionFacts($node->expr, $scope);
             if ($node instanceof ConcatAssign && !in_array($node->var->name, $facts['variables'], true)) {
                 $facts['variables'][] = $node->var->name;
+            }
+            if ($facts['unknown'] && ($node->expr instanceof Expr\MethodCall || $node->expr instanceof Expr\NullsafeMethodCall)) {
+                $facts['unknownMethodCall'] = ExpressionText::of($node->expr);
             }
 
             return [

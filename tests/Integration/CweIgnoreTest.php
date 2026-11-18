@@ -98,6 +98,39 @@ function withIgnoreFixture(callable $callback): void
     }
 }
 
+it('invalidates a CWE-95 ignore when the assigned request key changes', function (
+    string $config,
+    string $parameter,
+    string $read,
+    int $probability,
+): void {
+    withIgnoreFixture(function (string $file) use ($config, $parameter, $read, $probability): void {
+        $code = "<?php\n\nfunction reviewCode($parameter): void\n{\n    \$code = $read;\n    eval(\$code);\n}\n";
+        $code .= "\nclass OtherInput { public function input(string \$key): string { return \$key; } }\n";
+        $baseline = analyseIgnoreFixture($config, $file, $code, 95);
+        expect($baseline['findings'])->toHaveCount(1)
+            ->and($baseline['findings'][0]['message'])->toContain("Probability: $probability%.");
+        $fingerprint = ignoreFingerprintOf($baseline['findings'][0]);
+
+        $ignored = str_replace(
+            '    eval($code);',
+            "    // Review the source.\n\n    // @phpstan-ignore phpstanCwe.cwe95.$fingerprint (Reviewed source)\n    eval(\$code);",
+            $code,
+        );
+        expect(analyseIgnoreFixture($config, $file, $ignored, 95)['messages'])->toBe([]);
+
+        $changed = analyseIgnoreFixture($config, $file, str_replace('codes-2', 'codes*2', $ignored), 95);
+        expect(array_column($changed['messages'], 'identifier'))->toBe(['phpstanCwe.ignoreUnmatched', 'phpstanCwe.cwe95'])
+            ->and(array_column($changed['messages'], 'line'))->toBe([8, 9])
+            ->and(ignoreFingerprintOf($changed['findings'][0]))->not->toBe($fingerprint);
+    });
+})->with(['config/cwe95-laravel.neon', 'tests/fixtures/shared/extension.neon'])->with([
+    'typed request' => ['\Illuminate\Http\Request $request', '$request->input(\'codes-2\')', 90],
+    'untyped request' => ['$request', '$request->input(\'codes-2\')', 60],
+    'request helper' => ['', 'request(\'codes-2\')', 90],
+    'unrelated receiver' => ['OtherInput $other', '$other->input(\'codes-2\')', 60],
+]);
+
 it('suppresses exactly one finding with a package ignore', function (string $name): void {
     $case = ignoreRuleCases()[$name];
     withIgnoreFixture(function (string $file) use ($case): void {
