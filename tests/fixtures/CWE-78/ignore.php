@@ -1,7 +1,7 @@
 <?php
 
-// @phpstan-ignore phpstanCwe.cwe78 (safe)
+// @phpstan-ignore phpstanCwe.cwe78.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa (safe)
 exec('fixed-command');
 
-// @phpstan-ignore phpstanCwe.cwe78 (This command uses fixed local input.)
+// @phpstan-ignore phpstanCwe.cwe78.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa (This command uses fixed local input.)
 exec('another-fixed-command');

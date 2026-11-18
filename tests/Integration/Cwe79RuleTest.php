@@ -11,6 +11,8 @@ use PHPStan\Testing\RuleTestCase;
 
 class Cwe79RuleTestCase extends RuleTestCase
 {
+    use AnalysesWithoutFingerprints;
+
     private int $minimumProbability = 0;
 
     protected function getRule(): Rule
@@ -113,7 +115,7 @@ it('keeps the report metadata and source location for assigned input', function 
     $node = new PHPStan\Node\CollectedDataNode([
         $file => [Cwe79Collector::class => [
             ['kind' => 'assignment', 'scope' => 'file', 'offset' => 10, 'variable' => 'name', 'request' => true, 'variables' => []],
-            ['kind' => 'sink', 'scope' => 'file', 'offset' => 20, 'line' => 10, 'request' => false, 'variables' => ['name']],
+            ['kind' => 'sink', 'scope' => 'file', 'offset' => 20, 'line' => 10, 'request' => false, 'variables' => ['name'], 'expression' => '$name'],
         ]],
     ], false);
     $errors = (new Cwe79Rule())->processNode($node, $this->createStub(PHPStan\Analyser\Scope::class));
@@ -125,5 +127,6 @@ it('keeps the report metadata and source location for assigned input', function 
         ->and($errors[0]->getMetadata())->toBe([
             'cwe' => 79, 'severity' => 'high', 'probability' => 80,
             'url' => 'https://cwe.mitre.org/data/definitions/79.html',
+            'fingerprint' => Perturbatio\PhpstanCwe\Ignore\CweFingerprint::make(79, [$file, 'file', '$name']),
         ]);
 });

@@ -58,7 +58,17 @@ documents in ASD-STE100 Simplified Technical English.
 
 - Before you add assignment tracking, read `src/LocalAssignmentFlow.php`,
   `src/Rules/Cwe79/Cwe79Collector.php`, and the flow use in `Cwe79Rule`,
-  `Cwe78Rule`, and `Cwe89LaravelRule`.
+  `Cwe78Rule`, and `Cwe89Rule`.
+
+## Package ignores
+
+- Every rule supports `@phpstan-ignore phpstanCwe.cweNN.hash (reason)`.
+  Use `CweFingerprint`, `CweIgnoreCollector`, and `CweIgnoreSet` from
+  `src/Ignore`. Do not copy this logic into a rule.
+- A new rule must define a deterministic fingerprint identity without
+  comments, lines, token positions, or object identities. Add it to
+  `src/Ignore/CweIgnore.md`.
+
 - When a new or changed rule must follow local assigned values, use
   `LocalAssignmentFlow::sinks()`. Do not copy event sorting, variable storage,
   or scope handling into the rule. Rules that check direct expressions only
@@ -190,10 +200,10 @@ services:
 - Keep line numbers correct when you hide comments or text blocks.
 - Do not report the same real file two times when paths overlap.
 - For an instance ignore, use a comment in the syntax of the template with
-  the PHPStan form:
+  the package form:
 
 ```blade
-{{-- @phpstan-ignore phpstanCwe.cwe79 (Reason) --}}
+{{-- @phpstan-ignore phpstanCwe.cwe79.<fingerprint> (Reason) --}}
 {!! $trustedHtml !!}
 ```
 

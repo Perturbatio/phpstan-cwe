@@ -5,17 +5,19 @@ declare(strict_types=1);
 namespace Perturbatio\PhpstanCwe\Rules\Cwe78;
 
 use Perturbatio\PhpstanCwe\CweReport;
+use Perturbatio\PhpstanCwe\Ignore\CweFingerprint;
+use Perturbatio\PhpstanCwe\Ignore\CweIgnoreCollector;
+use Perturbatio\PhpstanCwe\Ignore\CweIgnoreSet;
 use Perturbatio\PhpstanCwe\LocalAssignmentFlow;
 use PhpParser\Node;
 use PHPStan\Analyser\Scope;
 use PHPStan\Node\CollectedDataNode;
 use PHPStan\Rules\IdentifierRuleError;
 use PHPStan\Rules\Rule;
-use PHPStan\Rules\RuleErrorBuilder;
 
 /**
  * @phpstan-import-type Cwe78Event from Cwe78Collector
- * @phpstan-import-type Cwe78IgnoreEvent from Cwe78IgnoreCollector
+ * @phpstan-import-type CweIgnoreEvent from CweIgnoreCollector
  * @implements Rule<CollectedDataNode>
  */
 final class Cwe78Rule implements Rule
@@ -57,27 +59,12 @@ final class Cwe78Rule implements Rule
         // The collector groups events by file. Check each file in source order
         /** @var array<string, list<Cwe78Event|null>> $eventsByFile */
         $eventsByFile = $node->get(Cwe78Collector::class);
+        $packageIgnoresByFile = CweIgnoreCollector::fromNode($node, 78);
         foreach ($eventsByFile as $file => $events) {
-            $reports = array_merge($reports, $this->reportsForFile($file, $events));
+            $reports = array_merge($reports, $this->reportsForFile($file, $events, $packageIgnoresByFile[$file] ?? []));
         }
-
-        // An ignore annotation must include a reason with at least two words
-        /** @var array<string, list<Cwe78IgnoreEvent|null>> $ignoresByFile */
-        $ignoresByFile = $node->get(Cwe78IgnoreCollector::class);
-        foreach ($ignoresByFile as $file => $events) {
-            foreach ($events as $event) {
-                if ($event === null || $this->wordCount($event['reason']) > 1) {
-                    continue;
-                }
-
-                $reports[] = RuleErrorBuilder::message(
-                    'CWE-78 ignore requires a reason with at least two words.',
-                )
-                    ->identifier('phpstanCwe.ignoreReason')
-                    ->file($file)
-                    ->line($event['line'])
-                    ->build();
-            }
+        foreach (array_diff_key($packageIgnoresByFile, $eventsByFile) as $file => $ignores) {
+            $reports = array_merge($reports, $this->reportsForFile($file, [], $ignores));
         }
 
         return $reports;
@@ -85,22 +72,43 @@ final class Cwe78Rule implements Rule
 
     /**
      * @param list<Cwe78Event|null> $events
+     * @param list<CweIgnoreEvent> $ignores
      * @return list<IdentifierRuleError>
      */
-    private function reportsForFile(string $file, array $events): array
+    private function reportsForFile(string $file, array $events, array $ignores): array
     {
         $reports = [];
+        $ignoreSet = new CweIgnoreSet(78, $file, $ignores);
         foreach (LocalAssignmentFlow::sinks($events, $this->resolveFacts(...)) as [$event, $facts]) {
+            $fingerprint = CweFingerprint::make(78, [
+                $file,
+                $event['scope'],
+                $event['expression'],
+                sprintf('%d%d%d', $facts['request'], $facts['hasStaticText'], $facts['throughAssignment']),
+            ]);
+            if ($ignoreSet->suppressesAt($fingerprint, $event['offset'])) {
+                continue;
+            }
+
             // A command may be unsafe even when no request source is known
             [$severity, $probability, $reason] = $this->rating($facts);
             if (!CweReport::isEnabled($this->minProbability, $probability)) {
                 continue;
             }
 
-            $reports[] = CweReport::make(78, $reason, $severity, $probability, $file, $event['line']);
+            $reports[] = CweReport::make(
+                78,
+                $reason,
+                $severity,
+                $probability,
+                $file,
+                $event['line'],
+                tip: CweIgnoreSet::tip(78, $fingerprint, 'the command and its arguments'),
+                fingerprint: $fingerprint,
+            );
         }
 
-        return $reports;
+        return array_merge($reports, $ignoreSet->reports());
     }
 
     /**
@@ -169,13 +177,5 @@ final class Cwe78Rule implements Rule
             self::getVeryHighProbability(),
             'Request input is used as the full command. Use a fixed executable and safe arguments.',
         ];
-    }
-
-    private function wordCount(string $reason): int
-    {
-        // Count words made from letters or numbers, including Unicode text
-        preg_match_all('/[\p{L}\p{N}]+/u', $reason, $matches);
-
-        return count($matches[0]);
     }
 }

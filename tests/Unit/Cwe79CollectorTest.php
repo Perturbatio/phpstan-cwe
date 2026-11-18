@@ -45,6 +45,7 @@ it('records local dependencies once with assignment and output positions', funct
     );
     expect($this->collector->processNode($output, $this->scope))->toBe([
         'kind' => 'sink', 'scope' => '::file', 'offset' => 30, 'line' => 4,
+        'expression' => "'prefix', \$html",
         'request' => false, 'variables' => ['html'],
     ]);
 });

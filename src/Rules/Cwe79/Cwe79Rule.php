@@ -5,14 +5,19 @@ declare(strict_types=1);
 namespace Perturbatio\PhpstanCwe\Rules\Cwe79;
 
 use Perturbatio\PhpstanCwe\CweReport;
+use Perturbatio\PhpstanCwe\Ignore\CweFingerprint;
+use Perturbatio\PhpstanCwe\Ignore\CweIgnoreCollector;
+use Perturbatio\PhpstanCwe\Ignore\CweIgnoreSet;
 use Perturbatio\PhpstanCwe\LocalAssignmentFlow;
 use PhpParser\Node;
 use PHPStan\Analyser\Scope;
 use PHPStan\Node\CollectedDataNode;
+use PHPStan\Rules\IdentifierRuleError;
 use PHPStan\Rules\Rule;
 
 /**
  * @phpstan-import-type HtmlEvent from Cwe79Collector
+ * @phpstan-import-type CweIgnoreEvent from CweIgnoreCollector
  * @implements Rule<CollectedDataNode>
  */
 final class Cwe79Rule implements Rule
@@ -38,30 +43,54 @@ final class Cwe79Rule implements Rule
 
     public function processNode(Node $node, Scope $scope): array
     {
-        // Do not scan output when this rule is below the configured score
-        if (!CweReport::isEnabled($this->minProbability, self::getProbability())) {
-            return [];
-        }
-
         $reports = [];
         /** @var array<string, list<HtmlEvent|null>> $eventsByFile */
         $eventsByFile = $node->get(Cwe79Collector::class);
+        $ignoresByFile = CweIgnoreCollector::fromNode($node, 79);
         foreach ($eventsByFile as $file => $events) {
-            foreach (LocalAssignmentFlow::sinks($events, $this->resolveInput(...)) as [$event, $request]) {
-                if ($request) {
-                    $reports[] = CweReport::make(
-                        79,
-                        'Request input is sent to HTML without an HTML escape call.',
-                        self::SEVERITY,
-                        self::getProbability(),
-                        $file,
-                        $event['line'],
-                    );
-                }
-            }
+            $reports = array_merge($reports, $this->reportsForFile($file, $events, $ignoresByFile[$file] ?? []));
+        }
+        foreach (array_diff_key($ignoresByFile, $eventsByFile) as $file => $ignores) {
+            $reports = array_merge($reports, $this->reportsForFile($file, [], $ignores));
         }
 
         return $reports;
+    }
+
+    /**
+     * @param list<HtmlEvent|null> $events
+     * @param list<CweIgnoreEvent> $ignores
+     * @return list<IdentifierRuleError>
+     */
+    private function reportsForFile(string $file, array $events, array $ignores): array
+    {
+        $reports = [];
+        $ignoreSet = new CweIgnoreSet(79, $file, $ignores);
+        foreach (LocalAssignmentFlow::sinks($events, $this->resolveInput(...)) as [$event, $request]) {
+            if (!$request) {
+                continue;
+            }
+
+            $fingerprint = CweFingerprint::make(79, [$file, $event['scope'], $event['expression']]);
+            if ($ignoreSet->suppressesAt($fingerprint, $event['offset'])
+                || !CweReport::isEnabled($this->minProbability, self::getProbability())
+            ) {
+                continue;
+            }
+
+            $reports[] = CweReport::make(
+                79,
+                'Request input is sent to HTML without an HTML escape call.',
+                self::SEVERITY,
+                self::getProbability(),
+                $file,
+                $event['line'],
+                tip: CweIgnoreSet::tip(79, $fingerprint, 'the printed value'),
+                fingerprint: $fingerprint,
+            );
+        }
+
+        return array_merge($reports, $ignoreSet->reports());
     }
 
     /**

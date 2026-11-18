@@ -1,10 +1,10 @@
 services:
-    phpstanCwe.cwe78Collector:
-        class: Perturbatio\PhpstanCwe\Rules\Cwe78\Cwe78Collector
+    phpstanCwe.ignoreCollector:
+        class: Perturbatio\PhpstanCwe\Ignore\CweIgnoreCollector
         tags:
             - phpstan.collector
-    -
-        class: Perturbatio\PhpstanCwe\Rules\Cwe78\Cwe78IgnoreCollector
+    phpstanCwe.cwe78Collector:
+        class: Perturbatio\PhpstanCwe\Rules\Cwe78\Cwe78Collector
         tags:
             - phpstan.collector
     -

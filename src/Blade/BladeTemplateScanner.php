@@ -4,15 +4,24 @@ declare(strict_types=1);
 
 namespace Perturbatio\PhpstanCwe\Blade;
 
+use Perturbatio\PhpstanCwe\Ignore\CweFingerprint;
+use Perturbatio\PhpstanCwe\Ignore\CweIgnoreCollector;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
 use SplFileInfo;
 
+/**
+ * A raw echo has a fingerprint. A package ignore uses the offset of the raw echo that follows it, or -1.
+ *
+ * @phpstan-type BladeFinding array{file: string, line: int, type: 'rawEcho', offset: int, fingerprint: string}
+ *     |array{file: string, line: int, type: 'packageIgnore', ignore: CweIgnoreEvent}
+ * @phpstan-import-type CweIgnoreEvent from CweIgnoreCollector
+ */
 final class BladeTemplateScanner
 {
     /**
      * @param list<string> $directories
-     * @return list<array{file: string, line: int, type: 'rawEcho'|'unmatchedIgnore'}>
+     * @return list<BladeFinding>
      */
     public function scan(array $directories): array
     {
@@ -54,7 +63,7 @@ final class BladeTemplateScanner
         return $findings;
     }
 
-    /** @return list<array{file: string, line: int, type: 'rawEcho'|'unmatchedIgnore'}> */
+    /** @return list<BladeFinding> */
     private function scanFile(string $file): array
     {
         $source = file_get_contents($file);
@@ -71,12 +80,22 @@ final class BladeTemplateScanner
         if (preg_match_all('/\{\{--(.*?)--\}\}/s', $withoutVerbatim, $comments, PREG_OFFSET_CAPTURE) === false) {
             throw new \RuntimeException(sprintf('Cannot scan Blade comments in view: %s', $file));
         }
-        $ignores = [];
+        $packageIgnores = [];
         foreach ($comments[0] as $index => [$comment, $offset]) {
-            if (($offset === 0 || $source[$offset - 1] !== '@')
-                && preg_match('/\A[ \t]*@phpstan-ignore[ \t]+phpstanCwe\.cwe79(?:[ \t]+\([^\r\n)]+\))?[ \t]*\z/', $comments[1][$index][0]) === 1
-            ) {
-                $ignores[$offset + strlen($comment)] = substr_count($source, "\n", 0, $offset) + 1;
+            if ($offset !== 0 && $source[$offset - 1] === '@') {
+                continue;
+            }
+            if (preg_match(
+                '/\A[ \t]*@phpstan-ignore[ \t]+phpstanCwe\.cwe79(?:\.([a-z0-9.]+))?[ \t]*(?:\(([^)\r\n]*)\))?[ \t]*\z/i',
+                $comments[1][$index][0],
+                $packageMatch,
+            ) === 1) {
+                $packageIgnores[$offset + strlen($comment)] = [
+                    'line' => substr_count($source, "\n", 0, $offset) + 1,
+                    'fingerprint' => strtolower($packageMatch[1] ?? ''),
+                    'reason' => trim($packageMatch[2] ?? ''),
+                    'offset' => -1,
+                ];
             }
         }
 
@@ -98,25 +117,48 @@ final class BladeTemplateScanner
             if (preg_match('/^(?:\'(?:\\\\.|[^\'\\\\])*\'|"(?:\\\\.|[^"\\\\$])*")$/s', $expression) === 1) {
                 continue;
             }
-            $isIgnored = false;
-            foreach ($ignores as $end => $line) {
-                // The comment must be on this line or the line before it.
+            foreach ($packageIgnores as $end => $packageIgnore) {
                 if ($end <= $offset
                     && preg_match('/\A[ \t]*(?:\r?\n[ \t]*)?\z/', substr($source, $end, $offset - $end)) === 1
                 ) {
-                    unset($ignores[$end]);
-                    $isIgnored = true;
+                    $packageIgnores[$end]['offset'] = $offset;
                 }
             }
-            if (!$isIgnored) {
-                $findings[] = ['file' => $file, 'line' => substr_count($source, "\n", 0, $offset) + 1, 'type' => 'rawEcho'];
-            }
+            $findings[] = [
+                'file' => $file,
+                'line' => substr_count($source, "\n", 0, $offset) + 1,
+                'type' => 'rawEcho',
+                'offset' => $offset,
+                'fingerprint' => CweFingerprint::make(79, [$file, 'blade', $this->normalise($expression)]),
+            ];
         }
-        foreach ($ignores as $line) {
-            $findings[] = ['file' => $file, 'line' => $line, 'type' => 'unmatchedIgnore'];
+        foreach ($packageIgnores as $packageIgnore) {
+            $findings[] = [
+                'file' => $file,
+                'line' => $packageIgnore['line'],
+                'type' => 'packageIgnore',
+                'ignore' => [
+                    'cwe' => 79,
+                    'file' => $file,
+                    'line' => $packageIgnore['line'],
+                    'startOffset' => $packageIgnore['offset'],
+                    'endOffset' => $packageIgnore['offset'],
+                    'startLine' => $packageIgnore['line'],
+                    'endLine' => $packageIgnore['line'],
+                    'fingerprint' => $packageIgnore['fingerprint'],
+                    'reason' => $packageIgnore['reason'],
+                ],
+            ];
         }
-
         return $findings;
+    }
+
+    private function normalise(string $expression): string
+    {
+        // Blank space and newline changes must not change a fingerprint.
+        $normalised = preg_replace('/\s+/u', ' ', $expression);
+
+        return $normalised ?? $expression;
     }
 
     /** @param array<string> $match */

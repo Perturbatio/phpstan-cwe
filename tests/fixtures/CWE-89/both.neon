@@ -1,0 +1,4 @@
+includes:
+    - ../../../config/parameters.neon
+    - ../../../config/rules/cwe89.neon
+    - ../../../config/rules/cwe89-laravel.neon

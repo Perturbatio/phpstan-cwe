@@ -2,8 +2,10 @@
 
 declare(strict_types=1);
 
-use Perturbatio\PhpstanCwe\Rules\Cwe89\Cwe89Rule;
+use Perturbatio\PhpstanCwe\Ignore\CweIgnoreCollector;
 use Perturbatio\PhpstanCwe\RequestInput;
+use Perturbatio\PhpstanCwe\Rules\Cwe89\Cwe89Collector;
+use Perturbatio\PhpstanCwe\Rules\Cwe89\Cwe89Rule;
 use PhpParser\Node;
 use PHPStan\Reflection\ReflectionProvider;
 use PHPStan\Rules\Rule;
@@ -11,6 +13,8 @@ use PHPStan\Testing\RuleTestCase;
 
 class Cwe89RuleTestCase extends RuleTestCase
 {
+    use AnalysesWithoutFingerprints;
+
     private int $minimumProbability = 0;
 
     protected function getRule(): Rule
@@ -18,9 +22,22 @@ class Cwe89RuleTestCase extends RuleTestCase
         return $this->makeRule($this->minimumProbability);
     }
 
+    protected function getCollectors(): array
+    {
+        return [
+            $this->makeCollector(),
+            new CweIgnoreCollector(),
+        ];
+    }
+
     public function makeRule(int $minimumProbability = 0): Cwe89Rule
     {
-        return new Cwe89Rule($this->getContainer()->getByType(ReflectionProvider::class), $minimumProbability);
+        return new Cwe89Rule($minimumProbability);
+    }
+
+    public function makeCollector(): Cwe89Collector
+    {
+        return new Cwe89Collector($this->getContainer()->getByType(ReflectionProvider::class));
     }
 
     public function checkFixture(array $expectedErrors): void
@@ -34,15 +51,15 @@ class Cwe89RuleTestCase extends RuleTestCase
         $this->checkFixture($expectedErrors);
     }
 
-    public function processNodeDirectly(Node $node): array
+    public function collect(Node $node, ?PHPStan\Analyser\Scope $scope = null): ?array
     {
-        return $this->getRule()->processNode($node, $this->createStub(PHPStan\Analyser\Scope::class));
+        return $this->makeCollector()->processNode($node, $scope ?? $this->createStub(PHPStan\Analyser\Scope::class));
     }
 }
 
 uses(Cwe89RuleTestCase::class);
 
-covers(Cwe89Rule::class, RequestInput::class);
+covers(Cwe89Rule::class, Cwe89Collector::class, RequestInput::class);
 
 it('reports direct SQL input but not bound or numeric input', function (): void {
     $message = 'CWE-89: Request input is used in a SQL query. Use a bound parameter. Severity: high. Probability: 80%. https://cwe.mitre.org/data/definitions/89.html';
@@ -76,23 +93,17 @@ it('ignores placeholder and missing query arguments', function (): void {
     );
     $missingQueryCall = new PhpParser\Node\Expr\FuncCall(new PhpParser\Node\Name('mysqli_query'), []);
 
-    expect($this->processNodeDirectly($placeholderCall))->toBe([])
-        ->and($this->processNodeDirectly($missingQueryCall))->toBe([]);
+    expect($this->collect($placeholderCall))->toBeNull()
+        ->and($this->collect($missingQueryCall))->toBeNull();
 });
 
 it('has a default probability of 80', function (): void {
-    expect(Cwe89Rule::getProbability())->toBe(80);
-});
-
-it('returns the min probability set in the constructor', function (): void {
-    $rule = $this->makeRule(50);
-    expect(invade($rule)->getMinProbability())->toBe(50);
+    expect(Cwe89Rule::getRequestProbability())->toBe(80);
 });
 
 it('uses zero as the default minimum probability', function (): void {
-    $rule = new Cwe89Rule($this->getContainer()->getByType(ReflectionProvider::class));
-
-    expect(invade($rule)->getMinProbability())->toBe(0);
+    expect(invade(new Cwe89Rule())->minProbability)->toBe(0)
+        ->and(invade($this->makeRule(50))->minProbability)->toBe(50);
 });
 
 it('reports each SQL sink with request input', function (string $kind, string $method, string $argumentName): void {
@@ -107,11 +118,13 @@ it('reports each SQL sink with request input', function (string $kind, string $m
         $node = new PhpParser\Node\Expr\MethodCall(new PhpParser\Node\Expr\Variable('connection'), strtoupper($method), $arguments);
         $scope->method('getType')->willReturn(new PHPStan\Type\ObjectType($kind));
     }
-    $errors = $this->makeRule(80)->processNode($node, $scope);
+    $scope->method('getFile')->willReturn('/tmp/sql.php');
+    $event = $this->collect($node, $scope);
 
-    expect($errors)->toHaveCount(1)
-        ->and($errors[0]->getIdentifier())->toBe('phpstanCwe.cwe89')
-        ->and($errors[0]->getMessage())->toBe('CWE-89: Request input is used in a SQL query. Use a bound parameter. Severity: high. Probability: 80%. https://cwe.mitre.org/data/definitions/89.html');
+    expect($event)->not->toBeNull()
+        ->and($event['file'])->toBe('/tmp/sql.php')
+        ->and($event['scope'])->toBe('::file')
+        ->and($event['expression'])->toStartWith(strtolower($method) . ': ');
 })->with([
     'mysqli query function' => ['function', 'mysqli_query', 'query'],
     'mysqli real query function' => ['function', 'mysqli_real_query', 'query'],
@@ -137,6 +150,40 @@ it('ignores calls that are not supported SQL sinks', function (): void {
         new PhpParser\Node\Expr\MethodCall(new PhpParser\Node\Expr\Variable('object'), 'query', [$input]),
         new PhpParser\Node\Expr\MethodCall(new PhpParser\Node\Expr\Variable('object'), new PhpParser\Node\Expr\Variable('method'), [$input]),
     ] as $node) {
-        expect($this->makeRule()->processNode($node, $scope))->toBe([]);
+        expect($this->collect($node, $scope))->toBeNull();
     }
+});
+
+it('puts the class, function, and file scope into the direct sink identity', function (): void {
+    $provider = $this->getContainer()->getByType(ReflectionProvider::class);
+    $makeScope = function (?string $class, ?string $function) use ($provider): PHPStan\Analyser\Scope {
+        $scope = $this->createStub(PHPStan\Analyser\Scope::class);
+        $scope->method('getFile')->willReturn('f.php');
+        $scope->method('getClassReflection')->willReturn($class === null ? null : $provider->getClass($class));
+        $reflection = null;
+        if ($function !== null) {
+            $reflection = $this->createStub(PHPStan\Reflection\Php\PhpFunctionFromParserNodeReflection::class);
+            $reflection->method('getName')->willReturn($function);
+        }
+        $scope->method('getFunction')->willReturn($reflection);
+
+        return $scope;
+    };
+    $call = static fn (string $function, PhpParser\Node\Expr $query): PhpParser\Node\Expr\FuncCall => new PhpParser\Node\Expr\FuncCall(
+        new PhpParser\Node\Name($function),
+        [new PhpParser\Node\Arg(new PhpParser\Node\Expr\Variable('c')), new PhpParser\Node\Arg($query)],
+        ['startTokenPos' => 7, 'startLine' => 9],
+    );
+    $input = new PhpParser\Node\Expr\ArrayDimFetch(new PhpParser\Node\Expr\Variable('_GET'), new PhpParser\Node\Scalar\String_('q'));
+
+    expect($this->collect($call('MYSQLI_QUERY', $input), $makeScope(stdClass::class, 'find')))->toBe([
+        'file' => 'f.php',
+        'scope' => 'stdClass::find',
+        'offset' => 7,
+        'line' => 9,
+        'expression' => 'mysqli_query: $_GET[\'q\']',
+    ])
+        ->and($this->collect($call('mysqli_query', $input), $makeScope(null, null))['scope'])->toBe('::file')
+        ->and($this->collect($call('mysqli_query', $input), $makeScope(stdClass::class, null))['scope'])->toBe('stdClass::file')
+        ->and($this->collect($call('mysqli_query', $input), $makeScope(null, 'run'))['scope'])->toBe('::run');
 });

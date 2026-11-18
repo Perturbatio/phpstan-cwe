@@ -20,7 +20,7 @@ function bladeRuleNode(bool $hasAnalysedFiles): CollectedDataNode
     return new CollectedDataNode($collectedData, false);
 }
 
-it('reports raw echoes and unmatched ignore comments from analysed files', function (): void {
+it('reports raw echoes and diagnoses malformed package ignore comments', function (): void {
     $directories = [
         __DIR__ . '/../fixtures/CWE-79/blade/ignores',
         __DIR__ . '/../fixtures/CWE-79/blade/views',
@@ -29,26 +29,29 @@ it('reports raw echoes and unmatched ignore comments from analysed files', funct
 
     $errors = $rule->processNode(bladeRuleNode(true), $this->createStub(Scope::class));
     $identifiers = array_map(
-        static fn (IdentifierRuleError $error): ?string => $error->getIdentifier(),
+        static fn (IdentifierRuleError $error): string => $error->getIdentifier(),
         $errors,
     );
 
     expect($rule->getNodeType())->toBe(CollectedDataNode::class)
         ->and(invade($rule)->minProbability)->toBe(0)
-        ->and($identifiers)->toHaveCount(18)
-        ->and($errors[0]->getMessage())->toBe('CWE-79: A Blade raw echo prints a value without HTML escape. Severity: high. Probability: 80%. https://cwe.mitre.org/data/definitions/79.html')
-        ->and($identifiers)->toContain('phpstanCwe.cwe79', 'phpstanCwe.ignoreUnmatched')
+        ->and(array_count_values($identifiers))->toEqual([
+            'phpstanCwe.cwe79' => 17,
+            'phpstanCwe.ignoreFingerprint' => 7,
+            'phpstanCwe.ignoreReason' => 6,
+        ])
+        ->and(preg_replace('/ Fingerprint: [0-9a-f]{64}\./', '', $errors[0]->getMessage()))->toBe('CWE-79: A Blade raw echo prints a value without HTML escape. Severity: high. Probability: 80%. https://cwe.mitre.org/data/definitions/79.html')
         ->and(Cwe79BladeRule::getProbability())->toBe(80)
-        ->and(Cwe79BladeRule::getIgnoreTip())->toBe(
-            'Only if you are sure that this value is safe HTML, put {{-- @phpstan-ignore phpstanCwe.cwe79 (Reason) --}} immediately BEFORE this raw echo. Replace "Reason" with the reason.',
+        ->and(Cwe79BladeRule::getIgnoreTip(str_repeat('a', 64)))->toBe(
+            'Only if you are sure that this value is safe HTML, put {{-- @phpstan-ignore phpstanCwe.cwe79.' . str_repeat('a', 64) . ' (<reason>) --}} immediately BEFORE this raw echo. Give a reason with at least two words.',
         );
 });
 
-it('reports raw echoes after unmatched ignores with the correct report data', function (): void {
+it('reports raw echoes after stale package ignores with the correct report data', function (): void {
     $directory = sys_get_temp_dir() . '/phpstan-cwe-' . bin2hex(random_bytes(8));
     mkdir($directory);
     $file = $directory . '/view.blade.php';
-    file_put_contents($file, "{{-- @phpstan-ignore phpstanCwe.cwe79 --}}\n\n{!! \$value !!}");
+    file_put_contents($file, "{{-- @phpstan-ignore phpstanCwe.cwe79." . str_repeat('a', 64) . " (checked value) --}}\n\n{!! \$value !!}");
     try {
         $rule = new Cwe79BladeRule(new BladeTemplateScanner(), [$directory], 80);
         $errors = $rule->processNode(bladeRuleNode(true), $this->createStub(Scope::class));
@@ -59,7 +62,7 @@ it('reports raw echoes after unmatched ignores with the correct report data', fu
             ->and($errors[1]->getIdentifier())->toBe('phpstanCwe.ignoreUnmatched')
             ->and($errors[1]->getLine())->toBe(1)
             ->and($errors[1]->getFile())->toBe($file)
-            ->and($errors[1]->getMessage())->toBe('No Blade raw echo matches @phpstan-ignore phpstanCwe.cwe79.');
+            ->and($errors[1]->getMessage())->toBe('CWE-79 ignore fingerprint does not match a finding. Review or remove this ignore.');
     } finally {
         unlink($file);
         rmdir($directory);

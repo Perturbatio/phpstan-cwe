@@ -80,20 +80,15 @@ shell syntax, but it does not stop a value from adding another argument.
 
 ## Ignore a finding
 
-A developer can ignore a finding with an inline PHPStan ignore annotation and a clear
-reason. A single word is not enough. The rule reports an ignore reason with
-fewer than two words. Explain why the command or its arguments are safe in
-this case.
-
-For example:
+Use the package `@phpstan-ignore` comment with the fingerprint from the
+report tip and a reason of at least two words. The rule reports a bad
+fingerprint, a short reason, and an ignore that matches no finding. The rule
+does not read native `@phpstan-ignore` comments. PHPStan handles those.
 
 ```php
-// @phpstan-ignore phpstanCwe.cwe78 (The command uses a fixed local file name.)
+// @phpstan-ignore phpstanCwe.cwe78.<fingerprint> (The command uses a fixed local file name.)
 exec('tool fixed-file');
 ```
-
-The rule should check that each ignore has a reason. The reason should give
-enough detail for another developer to review the decision.
 
 ## Scope for a first version
 
@@ -124,5 +119,7 @@ The first version does not check these functions:
 - An argument array for `proc_open()` avoids shell parsing, but the
   program can still treat an argument as an option or otherwise unsafe
   input.
+
+For fingerprint-based ignore annotations, read the [shared ignore guide](../../Ignore/CweIgnore.md).
 
 Full explanation: https://cwe.mitre.org/data/definitions/78.html

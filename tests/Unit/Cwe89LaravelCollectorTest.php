@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 use Perturbatio\PhpstanCwe\Rules\Cwe89\Cwe89LaravelCollector;
-use Perturbatio\PhpstanCwe\Rules\Cwe89\Cwe89LaravelRule;
+use Perturbatio\PhpstanCwe\Rules\Cwe89\Cwe89Rule;
 use PhpParser\Node\Arg;
 use PhpParser\Node\Expr;
 use PhpParser\Node\Expr\Assign;
@@ -42,7 +42,7 @@ class Cwe89LaravelCollectorTestCase extends RuleTestCase
 
     protected function getRule(): Rule
     {
-        return new Cwe89LaravelRule();
+        return new Cwe89Rule();
     }
 }
 
@@ -512,6 +512,7 @@ it('keeps the complete event shape and source position', function (): void {
         'scope' => 'stdClass::findUsers',
         'offset' => 31,
         'line' => 7,
+        'expression' => 'select: $query',
         'dynamic' => true,
         'request' => false,
         'unknown' => false,

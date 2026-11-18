@@ -82,4 +82,6 @@ also check that the user has permission to use that column.
 To see an example output of this rule run:
 ```vendor/bin/phpstan analyse tests/fixtures/CWE-89/laravel.php --configuration=config/cwe89-laravel.neon --level=0 --no-progress```
 
+For fingerprint-based ignore annotations, read the [shared ignore guide](../../Ignore/CweIgnore.md).
+
 Full explanation: https://cwe.mitre.org/data/definitions/89.html

@@ -3,11 +3,9 @@
 declare(strict_types=1);
 
 use Perturbatio\PhpstanCwe\Rules\Cwe78\Cwe78Collector;
-use Perturbatio\PhpstanCwe\Rules\Cwe78\Cwe78IgnoreCollector;
 use Perturbatio\PhpstanCwe\LaravelRequestInput;
 use PhpParser\Node\Arg;
 use PhpParser\Node\ArgPlaceholder;
-use PhpParser\Comment;
 use PhpParser\Node\Expr\Assign;
 use PhpParser\Node\Expr\AssignOp\Concat;
 use PhpParser\Node\Expr\ArrayDimFetch;
@@ -18,7 +16,6 @@ use PhpParser\Node\Expr\Variable;
 use PhpParser\Node\InterpolatedStringPart;
 use PhpParser\Node\Name;
 use PhpParser\Node\Scalar\String_;
-use PhpParser\Node\Stmt\Expression;
 use PhpParser\Node\VariadicPlaceholder;
 use PHPStan\Analyser\Scope;
 use PHPStan\Reflection\ReflectionProvider;
@@ -67,7 +64,7 @@ class Cwe78CollectorTestCase extends TestCase
 
 uses(Cwe78CollectorTestCase::class);
 
-covers(Cwe78Collector::class, Cwe78IgnoreCollector::class);
+covers(Cwe78Collector::class);
 
 it('provides a node type and collects assignments with request data', function (): void {
     $collector = $this->collector();
@@ -123,6 +120,7 @@ it('tracks concatenation assignments and command functions', function (): void {
             'scope' => 'file',
             'offset' => 3,
             'line' => 5,
+            'expression' => "exec('tool ' . \$_POST['value'])",
             'request' => true,
             'hasStaticText' => true,
             'throughAssignment' => false,
@@ -334,47 +332,4 @@ it('recognizes escaped values, named commands, process arrays, and backticks', f
             ]),
             $scope,
         ))->toMatchArray(['kind' => 'sink', 'request' => false, 'hasStaticText' => false]);
-});
-
-it('collects CWE-78 ignore reasons only from matching statement comments', function (): void {
-    $parser = (new PhpParser\ParserFactory())->createForNewestSupportedVersion();
-    $valid = $parser->parse("<?php\n// @phpstan-ignore phpstanCwe.cwe78 (This uses user@host input)\nexec('fixed');");
-    $other = $parser->parse("<?php\n// @phpstan-ignore phpstanCwe.cwe79 (fixed local output)\necho 'fixed';");
-    $missingReason = $parser->parse("<?php\n// @phpstan-ignore phpstanCwe.cwe78\nexec('fixed');");
-    $ordinaryComment = $parser->parse("<?php\n// ordinary comment\nexec('fixed');");
-    $spacedReason = $parser->parse("<?php\n// @phpstan-ignore phpstanCwe.cwe78 (  two words  )\nexec('fixed');");
-    $multipleComments = new Expression(
-        new FuncCall(new Name('exec'), []),
-        [
-            'comments' => [
-                new Comment('// unrelated comment'),
-                new Comment('// @phpstan-ignore phpstanCwe.cwe78 (two words)'),
-            ],
-        ],
-    );
-    $nonExpressionWithIgnore = new PhpParser\Node\Stmt\Return_(
-        expr: null,
-        attributes: [
-            'comments' => [
-                new Comment('// @phpstan-ignore phpstanCwe.cwe78 (two words)'),
-            ],
-        ],
-    );
-    $collector = new Cwe78IgnoreCollector();
-    $scope = $this->scope();
-
-    expect($collector->getNodeType())->toBe(PhpParser\Node::class)
-        ->and($collector->processNode($valid[0], $scope))->toBe([
-            'file' => '/tmp/cwe78.php',
-            'line' => 2,
-            'reason' => 'This uses user@host input',
-        ])
-        ->and($collector->processNode($other[0], $scope))->toBeNull()
-        ->and($collector->processNode($missingReason[0], $scope))->toMatchArray(['reason' => ''])
-        ->and($collector->processNode($ordinaryComment[0], $scope))->toBeNull()
-        ->and($collector->processNode($spacedReason[0], $scope))->toMatchArray(['reason' => 'two words'])
-        ->and($collector->processNode($multipleComments, $scope))->toMatchArray(['reason' => 'two words'])
-        ->and($collector->processNode(new Expression(new FuncCall(new Name('exec'), [])), $scope))->toBeNull()
-        ->and($collector->processNode($nonExpressionWithIgnore, $scope))->toBeNull()
-        ->and($collector->processNode(new PhpParser\Node\Stmt\Return_(), $scope))->toBeNull();
 });

@@ -3,7 +3,6 @@
 declare(strict_types=1);
 
 use Perturbatio\PhpstanCwe\Rules\Cwe78\Cwe78Collector;
-use Perturbatio\PhpstanCwe\Rules\Cwe78\Cwe78IgnoreCollector;
 use Perturbatio\PhpstanCwe\Rules\Cwe78\Cwe78Rule;
 use PHPStan\Analyser\Scope;
 use PHPStan\Node\CollectedDataNode;
@@ -21,17 +20,15 @@ class Cwe78RuleTestCase extends RuleTestCase
 
     /**
      * @param list<array<string, mixed>|null> $events
-     * @param list<array<string, mixed>|null> $ignoreEvents
      * @return list<PHPStan\Rules\IdentifierRuleError>
      */
-    public function processEvents(array $events, array $ignoreEvents = [], int $minimumProbability = 0): array
+    public function processEvents(array $events, int $minimumProbability = 0): array
     {
         $this->minimumProbability = $minimumProbability;
         $file = __DIR__ . '/../fixtures/CWE-78/cwe78.php';
         $data = [
             $file => [
                 Cwe78Collector::class => $events,
-                Cwe78IgnoreCollector::class => $ignoreEvents,
             ],
         ];
 
@@ -51,15 +48,16 @@ it('reports direct input with the highest rating and complete report metadata', 
 
     expect($errors)->toHaveCount(1)
         ->and($errors[0]->getIdentifier())->toBe('phpstanCwe.cwe78')
-        ->and($errors[0]->getMessage())->toBe(
+        ->and(withoutFingerprint($errors[0]->getMessage()))->toBe(
             'CWE-78: Request input is used as the full command. Use a fixed executable and safe arguments. Severity: very high. Probability: 95%. https://cwe.mitre.org/data/definitions/78.html',
         )
-        ->and($errors[0]->getMetadata())->toBe([
+        ->and(array_diff_key($errors[0]->getMetadata(), ['fingerprint' => true]))->toBe([
             'cwe' => 78,
             'severity' => 'very high',
             'probability' => 95,
             'url' => 'https://cwe.mitre.org/data/definitions/78.html',
         ])
+        ->and($errors[0]->getMetadata()['fingerprint'])->toMatch('/^[a-f0-9]{64}$/')
         ->and($errors[0]->getLine())->toBe(4);
 });
 
@@ -120,24 +118,16 @@ it('sorts events, skips missing sources, and keeps request tracking scoped to as
         ->and($errors[0]->getMetadata()['severity'])->toBe('medium');
 });
 
-it('continues after a filtered finding and a valid ignore reason', function (): void {
+it('continues after a filtered finding', function (): void {
     $events = [
         cwe78Sink(['offset' => 10, 'request' => true, 'hasStaticText' => true]),
         cwe78Sink(['offset' => 20, 'request' => true]),
     ];
-    $ignoreEvents = [
-        ['file' => '/tmp/cwe78.php', 'line' => 3, 'reason' => 'This is a clear reason'],
-        ['file' => '/tmp/cwe78.php', 'line' => 6, 'reason' => 'two words'],
-        ['file' => '/tmp/cwe78.php', 'line' => 9, 'reason' => 'safe'],
-    ];
-    $errors = $this->processEvents($events, $ignoreEvents, 90);
+    $errors = $this->processEvents($events, 90);
 
-    expect($errors)->toHaveCount(2)
-        ->and($errors[0]->getIdentifier())->toBe('phpstanCwe.cwe78')
+    expect($errors)->toHaveCount(1)
         ->and($errors[0]->getMetadata()['probability'])->toBe(95)
-        ->and($errors[0]->getLine())->toBe(4)
-        ->and($errors[1]->getIdentifier())->toBe('phpstanCwe.ignoreReason')
-        ->and($errors[1]->getLine())->toBe(9);
+        ->and($errors[0]->getLine())->toBe(4);
 });
 
 it('uses CollectedDataNode for package rule processing', function (): void {
@@ -154,26 +144,13 @@ it('filters findings below the configured minimum and validates its range', func
         ->and(fn () => new Cwe78Rule(-1))->toThrow(InvalidArgumentException::class);
 });
 
-it('reports ignores that do not have a two-word reason', function (): void {
-    $events = [
-        ['file' => '/tmp/cwe78.php', 'line' => 3, 'reason' => 'safe'],
-        ['file' => '/tmp/cwe78.php', 'line' => 6, 'reason' => 'This is a clear reason'],
-        null,
-    ];
-    $errors = $this->processEvents([], $events);
-
-    expect($errors)->toHaveCount(1)
-        ->and($errors[0]->getIdentifier())->toBe('phpstanCwe.ignoreReason')
-        ->and($errors[0]->getLine())->toBe(3)
-        ->and($errors[0]->getMessage())->toBe('CWE-78 ignore requires a reason with at least two words.');
-});
-
 function cwe78Sink(array $changes = []): array
 {
     return array_replace([
         'kind' => 'sink',
         'file' => __DIR__ . '/../fixtures/CWE-78/cwe78.php',
         'scope' => 'Example::command',
+        'expression' => 'shell_exec($command)',
         'offset' => 20,
         'line' => 4,
         'request' => false,

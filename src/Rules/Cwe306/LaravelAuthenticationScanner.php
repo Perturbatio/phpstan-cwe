@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Perturbatio\PhpstanCwe\Rules\Cwe306;
 
+use Perturbatio\PhpstanCwe\Ignore\ExpressionText;
 use PhpParser\Node;
 use PhpParser\Node\Expr;
 use PhpParser\Node\Identifier;
@@ -19,7 +20,7 @@ use PhpParser\NodeFinder;
  *
  * @phpstan-type CallableBody array{node: Stmt\ClassMethod|Stmt\Function_, class: string|null, symbol: string}
  * @phpstan-type Operation array{operation: string, operationLine: int}
- * @phpstan-type Finding array{file: string, line: int, operation: string, operationLine: int, probability: int}
+ * @phpstan-type Finding array{file: string, line: int, endLine: int, identity: string, operation: string, operationLine: int, probability: int}
  * @phpstan-type ReceiverType string|array{containerClass: string}
  * @phpstan-import-type CallFact from ChainedCallCollector
  */
@@ -224,7 +225,17 @@ final class LaravelAuthenticationScanner
             }
             $this->routes($group->stmts, $file, $middleware, $excludedMiddleware, $controller, $unknownNamespace);
         } elseif ($handler !== null) {
-            $this->checkRoute($handler, $file, $expression->getStartLine(), $middleware, $excludedMiddleware, $inheritedController);
+            // The identity has the route method and its arguments, without the action and without comments.
+            $routeArguments = [];
+            foreach ($base->getArgs() as $argument) {
+                if ($argument->value !== $handler) {
+                    $routeArguments[] = ExpressionText::of($argument->value);
+                }
+            }
+            /** @var Identifier $routeMethod */
+            $routeMethod = $base->name;
+            $routeIdentity = strtolower($routeMethod->toString()) . '(' . implode(', ', $routeArguments) . ')';
+            $this->checkRoute($handler, $file, $expression->getStartLine(), $expression->getEndLine(), $routeIdentity, $middleware, $excludedMiddleware, $inheritedController);
         }
     }
 
@@ -348,7 +359,7 @@ final class LaravelAuthenticationScanner
      * @param list<string>|null $excludedMiddleware
      * @param array{class: string|null}|null $controller
      */
-    private function checkRoute(Expr $handler, string $file, int $line, ?array $middleware, ?array $excludedMiddleware, ?array $controller): void
+    private function checkRoute(Expr $handler, string $file, int $line, int $endLine, string $routeIdentity, ?array $middleware, ?array $excludedMiddleware, ?array $controller): void
     {
         $symbol = $this->handlerSymbol($handler, $controller);
         $body = $symbol === null ? null : $this->body($symbol);
@@ -398,7 +409,14 @@ final class LaravelAuthenticationScanner
                 continue;
             }
             $seen[$operation['operation']] = $operation;
-            $this->findings[] = ['file' => $file, 'line' => $line, ...$operation, 'probability' => $probability];
+            $this->findings[] = [
+                'file' => $file,
+                'line' => $line,
+                'endLine' => $endLine,
+                'identity' => $routeIdentity . ' -> ' . ($symbol ?? 'closure'),
+                ...$operation,
+                'probability' => $probability,
+            ];
         }
     }
 

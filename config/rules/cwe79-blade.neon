@@ -1,4 +1,8 @@
 services:
+    phpstanCwe.ignoreCollector:
+        class: Perturbatio\PhpstanCwe\Ignore\CweIgnoreCollector
+        tags:
+            - phpstan.collector
     -
         class: Perturbatio\PhpstanCwe\Blade\BladeTemplateScanner
     -

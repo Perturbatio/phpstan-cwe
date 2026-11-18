@@ -3,7 +3,6 @@
 declare(strict_types=1);
 
 use Perturbatio\PhpstanCwe\Rules\Cwe95\Cwe95Collector;
-use Perturbatio\PhpstanCwe\Rules\Cwe95\Cwe95IgnoreCollector;
 use PhpParser\Node;
 use PhpParser\Node\Expr;
 use PhpParser\ParserFactory;
@@ -15,7 +14,7 @@ use PHPStan\Type\ObjectType;
 
 uses(PHPStanTestCase::class);
 
-covers(Cwe95Collector::class, Cwe95IgnoreCollector::class);
+covers(Cwe95Collector::class);
 
 it('collects eval expression facts without treating transformations as protection', function (
     string $expression,
@@ -152,48 +151,6 @@ it('marks an unresolved expression as unknown', function (): void {
     expect($event['unknown'])->toBeTrue()
         ->and($event['sources'])->toBe([])
         ->and($event['variables'])->toBe([]);
-});
-
-it('ignores nodes and comments without a package ignore directive', function (): void {
-    $collector = new Cwe95IgnoreCollector();
-    $scope = $this->createStub(Scope::class);
-    $statement = new Node\Stmt\Nop(['comments' => [new PhpParser\Comment('// Review this code.')]]);
-
-    expect($collector->getNodeType())->toBe(Node::class)
-        ->and($collector->processNode(new Expr\Variable('code'), $scope))->toBeNull()
-        ->and($collector->processNode(new Node\Stmt\Nop(), $scope))->toBeNull()
-        ->and($collector->processNode($statement, $scope))->toBeNull();
-});
-
-it('collects invalid fingerprints and normalises valid fingerprints', function (string $annotation, string $fingerprint, string $reason): void {
-    $collector = new Cwe95IgnoreCollector();
-    $scope = $this->createStub(Scope::class);
-    $scope->method('getFile')->willReturn('/tmp/eval.php');
-    $statement = new Node\Stmt\Nop([
-        'startTokenPos' => 20,
-        'endTokenPos' => 21,
-        'comments' => [new PhpParser\Comment('// Review this code.', 2), new PhpParser\Comment($annotation, 3)],
-    ]);
-
-    expect($collector->processNode($statement, $scope))->toBe([
-        'file' => '/tmp/eval.php',
-        'line' => 3,
-        'startOffset' => 20,
-        'endOffset' => 21,
-        'fingerprint' => $fingerprint,
-        'reason' => $reason,
-    ]);
-})->with([
-    'invalid hash' => ['// @phpstan-cwe-ignore phpstanCwe.cwe95[invalid] (Reviewed code)', '', 'Reviewed code'],
-    'uppercase hash' => ['// @phpstan-cwe-ignore phpstanCwe.cwe95[' . str_repeat('A', 64) . '] ( Reviewed code )', str_repeat('a', 64), 'Reviewed code'],
-]);
-
-it('does not collect ignore directives from expression nodes', function (): void {
-    $expression = new Expr\Variable('code', [
-        'comments' => [new PhpParser\Comment('// @phpstan-cwe-ignore phpstanCwe.cwe95[invalid] (Reviewed code)')],
-    ]);
-
-    expect((new Cwe95IgnoreCollector())->processNode($expression, $this->createStub(Scope::class)))->toBeNull();
 });
 
 it('keeps assignment offsets and dependency lists exact', function (bool $concatenate): void {

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use Perturbatio\PhpstanCwe\Rules\Cwe89\Cwe89LaravelRule;
+use Perturbatio\PhpstanCwe\Rules\Cwe89\Cwe89Rule;
 use Perturbatio\PhpstanCwe\Rules\Cwe89\Cwe89LaravelCollector;
 use PhpParser\Node\Arg;
 use PhpParser\Node\Expr\StaticCall;
@@ -20,7 +20,7 @@ class Cwe89LaravelRuleTestCase extends RuleTestCase
 
     protected function getRule(): Rule
     {
-        return new Cwe89LaravelRule($this->minimumProbability);
+        return new Cwe89Rule($this->minimumProbability);
     }
 
     public function processFindingsAtMinimumProbability(int $minimumProbability, array $events): array
@@ -32,7 +32,7 @@ class Cwe89LaravelRuleTestCase extends RuleTestCase
                 $collectedData[__DIR__ . '/../fixtures/CWE-89/laravel.php'][Cwe89LaravelCollector::class][] = null;
                 continue;
             }
-            $collectedData[$event['file']][Cwe89LaravelCollector::class][] = $event;
+            $collectedData[$event['file']][Cwe89LaravelCollector::class][] = $event + ['expression' => 'where: $query'];
         }
         $node = new CollectedDataNode($collectedData, false);
 
@@ -42,7 +42,7 @@ class Cwe89LaravelRuleTestCase extends RuleTestCase
 
 uses(Cwe89LaravelRuleTestCase::class);
 
-covers(Cwe89LaravelRule::class, Cwe89LaravelCollector::class);
+covers(Cwe89Rule::class, Cwe89LaravelCollector::class);
 
 it('reports a known request source traced through a local assignment', function (): void {
     $file = __DIR__ . '/../fixtures/CWE-89/laravel.php';
@@ -72,10 +72,10 @@ it('reports a known request source traced through a local assignment', function 
 
     expect($errors)->toHaveCount(1)
         ->and($errors[0]->getIdentifier())->toBe('phpstanCwe.cwe89')
-        ->and($errors[0]->getMessage())->toBe(
+        ->and(withoutFingerprint($errors[0]->getMessage()))->toBe(
             'CWE-89: Request input is used in Laravel raw SQL. Use a bound parameter. Severity: high. Probability: 80%. https://cwe.mitre.org/data/definitions/89.html',
         )
-        ->and($errors[0]->getTip())->toBe(
+        ->and($errors[0]->getTip())->toStartWith(
             'If you use wrap() for an SQL identifier, verify that PHPStan knows the argument is a string and the receiver is Illuminate\Database\Grammar or a subclass. Add or correct parameter types where needed. A string type alone does not make raw SQL safe. Use bound parameters for values.',
         );
 });
@@ -96,10 +96,10 @@ it('reports an unknown source with a lower confidence and warning', function ():
 
     expect($errors)->toHaveCount(1)
         ->and($errors[0]->getIdentifier())->toBe('phpstanCwe.cwe89')
-        ->and($errors[0]->getMessage())->toBe(
+        ->and(withoutFingerprint($errors[0]->getMessage()))->toBe(
             'CWE-89: Warning: The source of a dynamic value in Laravel raw SQL is unknown. Use a bound parameter. Severity: high. Probability: 45%. https://cwe.mitre.org/data/definitions/89.html',
         )
-        ->and($errors[0]->getTip())->toBe(
+        ->and($errors[0]->getTip())->toStartWith(
             'If you use wrap() for an SQL identifier, verify that PHPStan knows the argument is a string and the receiver is Illuminate\Database\Grammar or a subclass. Add or correct parameter types where needed. A string type alone does not make raw SQL safe. Use bound parameters for values.',
         );
 });
@@ -158,8 +158,8 @@ it('checks each supported database facade query method', function (): void {
 });
 
 it('rejects a probability minimum outside the valid range', function (): void {
-    expect(fn () => new Cwe89LaravelRule(101))->toThrow(InvalidArgumentException::class)
-        ->and(fn () => new Cwe89LaravelRule(-1))->toThrow(InvalidArgumentException::class);
+    expect(fn () => new Cwe89Rule(101))->toThrow(InvalidArgumentException::class)
+        ->and(fn () => new Cwe89Rule(-1))->toThrow(InvalidArgumentException::class);
 });
 
 it('filters reports below the configured probability minimum', function (): void {
@@ -184,8 +184,8 @@ it('returns the correct node type for the rule', function (): void {
 });
 
 it('uses the expected default probabilities', function (): void {
-    expect(Cwe89LaravelRule::getRequestProbability())->toBe(80)
-        ->and(Cwe89LaravelRule::getUnknownProbability())->toBe(45);
+    expect(Cwe89Rule::getRequestProbability())->toBe(80)
+        ->and(Cwe89Rule::getUnknownProbability())->toBe(45);
 });
 
 function laravelSqlSink(array $changes = []): array
@@ -204,7 +204,7 @@ function laravelSqlSink(array $changes = []): array
 }
 
 it('uses zero as the default minimum probability', function (): void {
-    expect(invade(new Cwe89LaravelRule())->minProbability)->toBe(0);
+    expect(invade(new Cwe89Rule())->minProbability)->toBe(0);
 });
 
 it('sorts events and isolates assignments by file and callable', function (): void {
@@ -225,9 +225,10 @@ it('sorts events and isolates assignments by file and callable', function (): vo
     $errors = $this->processFindingsAtMinimumProbability(0, $events);
 
     expect($errors)->toHaveCount(3)
-        ->and($errors[0]->getMetadata())->toBe([
+        ->and(array_diff_key($errors[0]->getMetadata(), ['fingerprint' => true]))->toBe([
             'cwe' => 89, 'severity' => 'high', 'probability' => 80, 'url' => 'https://cwe.mitre.org/data/definitions/89.html',
         ])
+        ->and($errors[0]->getMetadata()['fingerprint'])->toMatch('/^[a-f0-9]{64}$/')
         ->and($errors[0]->getLine())->toBe(4)
         ->and($errors[0]->getFile())->toBe(__DIR__ . '/../fixtures/CWE-89/laravel.php')
         ->and($errors[1]->getMetadata()['probability'])->toBe(45)

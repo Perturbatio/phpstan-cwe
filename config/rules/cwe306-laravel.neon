@@ -1,6 +1,10 @@
 # PHPStan loads these services when the CWE-306 Laravel config is included.
 # The collectors store analysis data. The rule uses that data to report findings.
 services:
+    phpstanCwe.ignoreCollector:
+        class: Perturbatio\PhpstanCwe\Ignore\CweIgnoreCollector
+        tags:
+            - phpstan.collector
     -
         # Record typed chained calls for the authentication scanner.
         class: Perturbatio\PhpstanCwe\Rules\Cwe306\ChainedCallCollector

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Perturbatio\PhpstanCwe\Rules\Cwe89;
 
+use Perturbatio\PhpstanCwe\Ignore\ExpressionText;
 use Perturbatio\PhpstanCwe\LaravelRequestInput;
 use PhpParser\Node;
 use PhpParser\Node\Arg;
@@ -44,6 +45,7 @@ use PHPStan\Type\ObjectType;
  *     scope: string,
  *     offset: int,
  *     line: int,
+ *     expression: string,
  *     dynamic: bool,
  *     request: bool,
  *     unknown: bool,
@@ -138,11 +140,22 @@ final class Cwe89LaravelCollector implements Collector
             'kind' => 'sink',
             ...$this->eventBase($node->getStartTokenPos(), $scope),
             'line' => $node->getStartLine(),
+            'expression' => $this->sinkName($node) . ': ' . ExpressionText::of($query),
             'dynamic' => $facts['dynamic'],
             'request' => $facts['request'],
             'unknown' => $facts['unknown'],
             'variables' => $facts['variables'],
         ];
+    }
+
+    private function sinkName(Node $node): string
+    {
+        // getQueryExpression() returns a query only for a method or static call with a fixed name
+        /** @var MethodCall|StaticCall $node */
+        /** @var Identifier $name */
+        $name = $node->name;
+
+        return strtolower($name->toString());
     }
 
     private function getQueryExpression(Node $node, Scope $scope): ?Expr

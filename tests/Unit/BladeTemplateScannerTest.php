@@ -6,9 +6,21 @@ use Perturbatio\PhpstanCwe\Blade\BladeTemplateScanner;
 
 covers(BladeTemplateScanner::class);
 
+/**
+ * @param list<array<string, mixed>> $findings
+ * @return list<array<string, mixed>>
+ */
+function withoutBladeIdentity(array $findings): array
+{
+    return array_map(
+        static fn (array $finding): array => array_diff_key($finding, ['offset' => true, 'fingerprint' => true, 'ignore' => true]),
+        $findings,
+    );
+}
+
 it('finds raw Blade values and keeps template line numbers', function (): void {
     $directory = __DIR__ . '/../fixtures/CWE-79/blade/views';
-    $findings = (new BladeTemplateScanner())->scan([$directory]);
+    $findings = withoutBladeIdentity((new BladeTemplateScanner())->scan([$directory]));
 
     expect($findings)->toHaveCount(4)
         ->and($findings)->toContain(['file' => $directory.'/home.blade.php', 'line' => 3, 'type' => 'rawEcho'])
@@ -17,18 +29,17 @@ it('finds raw Blade values and keeps template line numbers', function (): void {
         ->and($findings)->toContain(['file' => $directory.'/parts/item.blade.php', 'line' => 1, 'type' => 'rawEcho']);
 });
 
-it('ignores only the raw echo next to a matching Blade comment', function (): void {
+it('finds raw echoes and malformed package ignores in the same Blade view', function (): void {
     $file = __DIR__ . '/../fixtures/CWE-79/blade/ignores/ignored.blade.php';
     $findings = (new BladeTemplateScanner())->scan([dirname($file)]);
-    $linesByType = [];
 
+    $linesByType = [];
     foreach ($findings as $finding) {
-        expect($finding['file'])->toBe($file);
         $linesByType[$finding['type']][] = $finding['line'];
     }
 
-    expect($linesByType['rawEcho'])->toBe([3, 5, 8, 11, 14, 18, 20, 23, 24, 26])
-        ->and($linesByType['unmatchedIgnore'])->toBe([6, 9, 12, 21]);
+    expect($linesByType['rawEcho'])->toEqualCanonicalizing([2, 3, 4, 5, 8, 11, 14, 18, 20, 23, 24, 24, 26])
+        ->and($linesByType['packageIgnore'])->toEqualCanonicalizing([1, 4, 6, 9, 12, 21, 24]);
 });
 
 it('does not scan files that are not Blade templates', function (): void {
@@ -116,7 +127,7 @@ it('handles raw echoes and ignore comments at text boundaries', function (string
     $file = $directory . '/boundary.blade.php';
     file_put_contents($file, $source);
     try {
-        $findings = (new BladeTemplateScanner())->scan([$directory]);
+        $findings = withoutBladeIdentity((new BladeTemplateScanner())->scan([$directory]));
         expect($findings)->toBe(array_map(
             static fn (array $finding): array => ['file' => $file, ...$finding],
             $expected,
@@ -128,11 +139,11 @@ it('handles raw echoes and ignore comments at text boundaries', function (string
 })->with([
     'raw echo before trailing at sign' => ['{!! $value !!}@', [['line' => 1, 'type' => 'rawEcho']]],
     'escaped raw echo at start' => ['@{!! $value !!}', []],
-    'ignore before trailing at sign' => ['{{-- @phpstan-ignore phpstanCwe.cwe79 --}}{!! $value !!}@', []],
-    'ignore after one character' => ['x{{-- @phpstan-ignore phpstanCwe.cwe79 --}}{!! $value !!}', []],
+    'ignore before trailing at sign' => ['{{-- @phpstan-ignore phpstanCwe.cwe79 --}}{!! $value !!}@', [['line' => 1, 'type' => 'rawEcho'], ['line' => 1, 'type' => 'packageIgnore']]],
+    'ignore after one character' => ['x{{-- @phpstan-ignore phpstanCwe.cwe79 --}}{!! $value !!}', [['line' => 1, 'type' => 'rawEcho'], ['line' => 1, 'type' => 'packageIgnore']]],
     'first character newline' => ["\n{!! \$value !!}", [['line' => 2, 'type' => 'rawEcho']]],
-    'ignore after newline' => ["\n{{-- @phpstan-ignore phpstanCwe.cwe79 --}}", [['line' => 2, 'type' => 'unmatchedIgnore']]],
-    'ignore after raw echo' => ['{!! $value !!}{{-- @phpstan-ignore phpstanCwe.cwe79 --}}', [['line' => 1, 'type' => 'rawEcho'], ['line' => 1, 'type' => 'unmatchedIgnore']]],
+    'ignore after newline' => ["\n{{-- @phpstan-ignore phpstanCwe.cwe79 --}}", [['line' => 2, 'type' => 'packageIgnore']]],
+    'ignore after raw echo' => ['{!! $value !!}{{-- @phpstan-ignore phpstanCwe.cwe79 --}}', [['line' => 1, 'type' => 'rawEcho'], ['line' => 1, 'type' => 'packageIgnore']]],
 ]);
 
 it('continues after missing default directories and duplicate views', function (): void {
@@ -151,7 +162,7 @@ it('continues after missing default directories and duplicate views', function (
         $iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($directory, FilesystemIterator::SKIP_DOTS));
         $iterator->rewind();
         $firstVisitedDirectory = $iterator->current()->getPath();
-        $findings = (new BladeTemplateScanner())->scan(['resources/views', $firstVisitedDirectory, $directory]);
+        $findings = withoutBladeIdentity((new BladeTemplateScanner())->scan(['resources/views', $firstVisitedDirectory, $directory]));
         expect($findings)->toHaveCount(2)
             ->and($findings)->toContain(['file' => $firstFile, 'line' => 1, 'type' => 'rawEcho'])
             ->and($findings)->toContain(['file' => $secondFile, 'line' => 1, 'type' => 'rawEcho']);
@@ -176,4 +187,95 @@ it('does not scan raw echo text in other file types', function (): void {
         unlink($file);
         rmdir($directory);
     }
+});
+
+/**
+ * @param array<string, string> $views
+ * @return array<string, list<array<string, mixed>>>
+ */
+function scanBladeViews(array $views): array
+{
+    $directory = sys_get_temp_dir() . '/phpstan-cwe-' . bin2hex(random_bytes(8));
+    mkdir($directory);
+    $result = [];
+
+    try {
+        foreach ($views as $name => $contents) {
+            file_put_contents($directory . '/' . $name, $contents);
+        }
+        foreach ((new BladeTemplateScanner())->scan([$directory]) as $finding) {
+            $result[basename($finding['file'])][] = $finding;
+        }
+    } finally {
+        foreach (array_keys($views) as $name) {
+            unlink($directory . '/' . $name);
+        }
+        rmdir($directory);
+    }
+
+    return $result;
+}
+
+it('reports exact package ignore data and attaches it to the echo that follows', function (): void {
+    $hash = str_repeat('A', 64);
+    $comment = "{{-- @phpstan-ignore phpstanCwe.cwe79.$hash (  checked value  ) --}}";
+    $result = scanBladeViews([
+        'adjacent.blade.php' => "\n\n$comment{!! \$a !!}",
+        'unmatched.blade.php' => "\n$comment text",
+        'bare.blade.php' => "{{-- @phpstan-ignore phpstanCwe.cwe79 --}}\n{!! \$a !!}",
+    ])['adjacent.blade.php'] ?? [];
+    $adjacent = $result[1];
+
+    expect($adjacent['type'])->toBe('packageIgnore')
+        ->and($adjacent['line'])->toBe(3)
+        ->and($adjacent['ignore'])->toBe([
+            'cwe' => 79,
+            'file' => $adjacent['file'],
+            'line' => 3,
+            'startOffset' => 2 + strlen($comment),
+            'endOffset' => 2 + strlen($comment),
+            'startLine' => 3,
+            'endLine' => 3,
+            'fingerprint' => str_repeat('a', 64),
+            'reason' => 'checked value',
+        ]);
+});
+
+it('reports a package ignore without an echo with offset minus one and a bare ignore with empty values', function (): void {
+    $views = scanBladeViews([
+        'unmatched.blade.php' => "\n{{-- @phpstan-ignore phpstanCwe.cwe79 --}} text",
+    ]);
+    $ignore = $views['unmatched.blade.php'][0]['ignore'];
+
+    expect($views['unmatched.blade.php'])->toHaveCount(1)
+        ->and($ignore['startOffset'])->toBe(-1)
+        ->and($ignore['endOffset'])->toBe(-1)
+        ->and($ignore['line'])->toBe(2)
+        ->and($ignore['fingerprint'])->toBe('')
+        ->and($ignore['reason'])->toBe('');
+});
+
+it('scans every comment after an escaped comment and after a package ignore', function (): void {
+    $hash = str_repeat('a', 64);
+    $views = scanBladeViews([
+        'mixed.blade.php' => "@{{-- @phpstan-ignore phpstanCwe.cwe79 --}}\n"
+            . "{{-- @phpstan-ignore phpstanCwe.cwe79.$hash (checked value) --}}\n"
+            . "{{-- @phpstan-ignore phpstanCwe.cwe79 (Checked value) --}}{!! \$a !!}\n",
+    ]);
+    $types = array_column($views['mixed.blade.php'], 'type');
+
+    expect($types)->toBe(['rawEcho', 'packageIgnore', 'packageIgnore']);
+});
+
+it('keeps the same fingerprint when whitespace in the raw echo changes', function (): void {
+    $views = scanBladeViews([
+        'a.blade.php' => '{!! $a   .   $b !!}',
+        'b.blade.php' => "{!! \$a\n .\t\$b !!}",
+    ]);
+    $first = $views['a.blade.php'][0];
+    $second = $views['b.blade.php'][0];
+
+    expect($first['fingerprint'])->toMatch('/^[a-f0-9]{64}$/')
+        ->and($first['fingerprint'])->toBe(\Perturbatio\PhpstanCwe\Ignore\CweFingerprint::make(79, [$first['file'], 'blade', '$a . $b']))
+        ->and($second['fingerprint'])->toBe(\Perturbatio\PhpstanCwe\Ignore\CweFingerprint::make(79, [$second['file'], 'blade', '$a . $b']));
 });

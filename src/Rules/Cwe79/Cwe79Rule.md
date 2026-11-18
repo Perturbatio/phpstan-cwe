@@ -80,4 +80,6 @@ contexts by hand; this rule is not a full security check.
   the call as an HTML escape. The rule does not inspect the function body.
 - An unknown source does not prove that a value is safe.
 
+For fingerprint-based ignore annotations, read the [shared ignore guide](../../Ignore/CweIgnore.md).
+
 Full explanation: https://cwe.mitre.org/data/definitions/79.html

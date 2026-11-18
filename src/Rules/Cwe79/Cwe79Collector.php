@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Perturbatio\PhpstanCwe\Rules\Cwe79;
 
+use Perturbatio\PhpstanCwe\Ignore\ExpressionText;
 use Perturbatio\PhpstanCwe\RequestInput;
 use PhpParser\Node;
 use PhpParser\Node\Expr\Assign;
@@ -17,7 +18,7 @@ use PHPStan\Reflection\ReflectionProvider;
 
 /**
  * @phpstan-type HtmlAssignment array{kind: 'assignment', scope: string, offset: int, variable: string, request: bool, variables: list<string>}
- * @phpstan-type HtmlSink array{kind: 'sink', scope: string, offset: int, line: int, request: bool, variables: list<string>}
+ * @phpstan-type HtmlSink array{kind: 'sink', scope: string, offset: int, line: int, expression: string, request: bool, variables: list<string>}
  * @phpstan-type HtmlEvent HtmlAssignment|HtmlSink
  * @implements Collector<Node, HtmlEvent|null>
  */
@@ -89,6 +90,7 @@ final class Cwe79Collector implements Collector
             'scope' => $scopeName,
             'offset' => $node->getEndTokenPos(),
             'line' => $node->getStartLine(),
+            'expression' => implode(', ', array_map(ExpressionText::of(...), $expressions)),
             'request' => $request,
             // Do not mix closure variables with variables in the outer scope.
             'variables' => $scope->isInAnonymousFunction() ? [] : array_values(array_unique($variables)),

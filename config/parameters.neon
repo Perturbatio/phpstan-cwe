@@ -22,3 +22,13 @@ parameters:
 # Define the accepted parameter names and types for PHPStan configuration checks
 parametersSchema:
     phpstanCwe: structure([minProbability: int(), bladeDirectories: listOf(string()), cwe306CriticalOperations: listOf(string()), cwe306MiddlewareAliases: arrayOf(string(), string()), cwe306GlobalMiddleware: schema(listOf(string()), nullable())])
+
+services:
+    phpstanCwe.ignoreParser:
+        class: Perturbatio\PhpstanCwe\Ignore\CweIgnoreParser
+        arguments:
+            parser: @currentPhpVersionRichParser
+        autowired: false
+    cachedRichParser:
+        arguments:
+            originalParser: @phpstanCwe.ignoreParser

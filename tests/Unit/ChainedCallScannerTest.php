@@ -30,7 +30,7 @@ it('applies collected operations only at reachable execution points', function (
 
     expect($reports)->toHaveCount($count);
     if ($count !== 0) {
-        expect($reports[0])->toBe([
+        expect(array_diff_key($reports[0], ['endLine' => true, 'identity' => true]))->toBe([
             'file' => 'route.php', 'line' => 1, 'operation' => 'App\Service::execute',
             'operationLine' => 1, 'probability' => $middleware === '->middleware("unknown")' ? 40 : 80,
         ]);
@@ -92,7 +92,7 @@ it('keeps facts available through helpers in another file', function (): void {
         ['route.php' => $routes, 'helper.php' => $helper],
         ['helper.php' => chainedCallFacts($helper)],
     );
-    expect($reports)->toBe([[
+    expect(array_map(static fn (array $report): array => array_diff_key($report, ['endLine' => true, 'identity' => true]), $reports))->toBe([[
         'file' => 'route.php', 'line' => 1, 'operation' => 'App\Service::execute',
         'operationLine' => 2, 'probability' => 80,
     ]]);

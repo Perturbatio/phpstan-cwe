@@ -362,7 +362,7 @@ PHP);
     ];
     $reports = (new LaravelAuthenticationScanner(['App\Service::execute'], [], []))->scan(['routes.php' => $nodes], ['routes.php' => [$fact]]);
 
-    expect($reports)->toMatchArray([[
+    expect(array_map(static fn (array $report): array => array_diff_key($report, ['endLine' => true, 'identity' => true]), $reports))->toMatchArray([[
         'file' => 'routes.php', 'line' => 5, 'operation' => 'App\Service::execute', 'operationLine' => 4, 'probability' => 80,
     ]]);
 });

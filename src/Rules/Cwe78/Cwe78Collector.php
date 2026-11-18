@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Perturbatio\PhpstanCwe\Rules\Cwe78;
 
+use Perturbatio\PhpstanCwe\Ignore\ExpressionText;
 use Perturbatio\PhpstanCwe\LaravelRequestInput;
 use PhpParser\Node;
 use PhpParser\Node\Arg;
@@ -36,6 +37,7 @@ use PHPStan\Reflection\ReflectionProvider;
  *     scope: string,
  *     offset: int,
  *     line: int,
+ *     expression: string,
  *     request: bool,
  *     hasStaticText: bool,
  *     throughAssignment: bool,
@@ -120,10 +122,13 @@ final class Cwe78Collector implements Collector
             $facts = $this->expressionFacts($command, $scope);
         }
 
+        // A command sink is a shell execution or a function call, and both are expressions
+        /** @var Expr $node */
         return [
             'kind' => 'sink',
             ...$this->eventBase($node->getStartTokenPos(), $scope),
             'line' => $node->getStartLine(),
+            'expression' => ExpressionText::of($node),
             'request' => $facts['request'],
             'hasStaticText' => $facts['hasStaticText'],
             'throughAssignment' => $facts['variables'] !== [],

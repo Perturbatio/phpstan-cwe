@@ -3,8 +3,8 @@
 declare(strict_types=1);
 
 use Perturbatio\PhpstanCwe\Rules\Cwe95\Cwe95Collector;
-use Perturbatio\PhpstanCwe\Rules\Cwe95\Cwe95Fingerprint;
-use Perturbatio\PhpstanCwe\Rules\Cwe95\Cwe95IgnoreCollector;
+use Perturbatio\PhpstanCwe\Ignore\CweFingerprint;
+use Perturbatio\PhpstanCwe\Ignore\CweIgnoreCollector;
 use Perturbatio\PhpstanCwe\Rules\Cwe95\Cwe95Rule;
 use PHPStan\Analyser\Scope;
 use PHPStan\Node\CollectedDataNode;
@@ -35,7 +35,10 @@ class Cwe95RuleTestCase extends RuleTestCase
         $data = [
             $file => [
                 Cwe95Collector::class => $events,
-                Cwe95IgnoreCollector::class => $ignoreEvents,
+                CweIgnoreCollector::class => array_map(
+                    static fn (?array $event): ?array => $event === null ? null : [$event],
+                    $ignoreEvents,
+                ),
             ],
         ];
 
@@ -48,7 +51,15 @@ class Cwe95RuleTestCase extends RuleTestCase
 
 uses(Cwe95RuleTestCase::class);
 
-covers(Cwe95Rule::class, Cwe95Fingerprint::class, Cwe95Collector::class, Cwe95IgnoreCollector::class);
+covers(Cwe95Rule::class, CweFingerprint::class, Cwe95Collector::class, CweIgnoreCollector::class);
+
+/** @param list<string> $sources */
+function cwe95Fingerprint(string $file, string $scope, string $expression, array $sources): string
+{
+    sort($sources);
+
+    return CweFingerprint::make(95, [$file, $scope, $expression, implode('|', $sources)]);
+}
 
 it('records lexical scope bounds without a line-based identity', function (bool $isArrow): void {
     $expression = new PhpParser\Node\Expr\Eval_(new PhpParser\Node\Expr\Variable('code'));
@@ -130,7 +141,7 @@ it('reports direct, assigned, unknown, and fixed eval values with separate ratin
 
     foreach ($errors as $error) {
         expect($error->getTip())->toBe(sprintf(
-            'Only ignore this finding if you have checked that the evaluated code is safe. Give a reason with at least two words: // @phpstan-cwe-ignore phpstanCwe.cwe95[%s] (<reason>)',
+            'Only ignore this finding if you have checked that the evaluated code is safe. Give a reason with at least two words: // @phpstan-ignore phpstanCwe.cwe95.%s (<reason>)',
             $error->getMetadata()['fingerprint'],
         ));
     }
@@ -138,7 +149,7 @@ it('reports direct, assigned, unknown, and fixed eval values with separate ratin
 
 it('requires a reason for a matching fingerprint without suppressing the finding', function (string $annotation): void {
     $event = cwe95Event();
-    $fingerprint = Cwe95Fingerprint::make($event['file'], $event['scope'], $event['expression'], []);
+    $fingerprint = cwe95Fingerprint($event['file'], $event['scope'], $event['expression'], []);
     $statement = new PhpParser\Node\Stmt\Expression(
         new PhpParser\Node\Expr\Eval_(new PhpParser\Node\Expr\Variable('code')),
         [
@@ -149,66 +160,69 @@ it('requires a reason for a matching fingerprint without suppressing the finding
     );
     $scope = $this->createStub(Scope::class);
     $scope->method('getFile')->willReturn($event['file']);
-    $ignore = (new Cwe95IgnoreCollector())->processNode($statement, $scope);
-    $errors = $this->processEvents([$event], [$ignore]);
+    $ignore = (new CweIgnoreCollector())->processNode($statement, $scope);
+    $errors = $this->processEvents([$event], $ignore);
 
     expect(array_map(static fn ($error): string => $error->getIdentifier(), $errors))
-        ->toBe(['phpstanCwe.ignoreReason', 'phpstanCwe.cwe95'])
-        ->and($errors[0]->getMessage())->toBe('CWE-95 ignore requires a reason with at least two words.')
-        ->and($errors[0]->getLine())->toBe(3);
+        ->toBe(['phpstanCwe.cwe95', 'phpstanCwe.ignoreReason'])
+        ->and($errors[1]->getMessage())->toBe('CWE-95 ignore requires a reason with at least two words.')
+        ->and($errors[1]->getLine())->toBe(3);
 })->with([
-    'block comment without reason' => '/* @phpstan-cwe-ignore phpstanCwe.cwe95[%s] */',
-    'line comment without reason' => '// @phpstan-cwe-ignore phpstanCwe.cwe95[%s]',
-    'empty reason' => '// @phpstan-cwe-ignore phpstanCwe.cwe95[%s] ()',
-    'blank reason' => '// @phpstan-cwe-ignore phpstanCwe.cwe95[%s] (   )',
-    'one-word reason' => '// @phpstan-cwe-ignore phpstanCwe.cwe95[%s] (safe)',
+    'block comment without reason' => '/* @phpstan-ignore phpstanCwe.cwe95.%s */',
+    'line comment without reason' => '// @phpstan-ignore phpstanCwe.cwe95.%s',
+    'empty reason' => '// @phpstan-ignore phpstanCwe.cwe95.%s ()',
+    'blank reason' => '// @phpstan-ignore phpstanCwe.cwe95.%s (   )',
+    'one-word reason' => '// @phpstan-ignore phpstanCwe.cwe95.%s (safe)',
 ]);
 
 it('suppresses only a matching fingerprint with a valid reason', function (): void {
     $event = cwe95Event(['kind' => 'sink', 'line' => 4, 'expression' => "eval('return 1;')"]);
-    $fingerprint = Cwe95Fingerprint::make(
+    $fingerprint = cwe95Fingerprint(
         $event['file'],
         $event['scope'],
         $event['expression'],
         [],
     );
-    $ignore = ['file' => $event['file'], 'line' => 3, 'startOffset' => 20, 'endOffset' => 25, 'fingerprint' => $fingerprint, 'reason' => 'Fixed local code'];
+    $ignore = ['cwe' => 95, 'startLine' => 3, 'endLine' => 5, 'file' => $event['file'], 'line' => 3, 'startOffset' => 20, 'endOffset' => 25, 'fingerprint' => $fingerprint, 'reason' => 'Fixed local code'];
 
     expect($this->processEvents([$event], [$ignore]))->toBe([]);
 });
 
 it('reports stale and invalid fingerprint ignores', function (): void {
     $event = cwe95Event(['kind' => 'sink', 'line' => 4, 'expression' => "eval('return 1;')"]);
-    $matchingFingerprint = Cwe95Fingerprint::make(
+    $matchingFingerprint = cwe95Fingerprint(
         $event['file'],
         $event['scope'],
         $event['expression'],
         [],
     );
     $ignores = [
-        ['file' => $event['file'], 'line' => 3, 'startOffset' => 20, 'endOffset' => 25, 'fingerprint' => str_repeat('0', 64), 'reason' => 'Old safe code'],
-        ['file' => $event['file'], 'line' => 5, 'startOffset' => 20, 'endOffset' => 25, 'fingerprint' => 'invalid', 'reason' => 'No longer safe'],
-        ['file' => $event['file'], 'line' => 6, 'startOffset' => 20, 'endOffset' => 25, 'fingerprint' => $matchingFingerprint, 'reason' => 'safe'],
+        ['cwe' => 95, 'startLine' => 3, 'endLine' => 5, 'file' => $event['file'], 'line' => 3, 'startOffset' => 20, 'endOffset' => 25, 'fingerprint' => str_repeat('0', 64), 'reason' => 'Old safe code'],
+        ['cwe' => 95, 'startLine' => 3, 'endLine' => 5, 'file' => $event['file'], 'line' => 5, 'startOffset' => 20, 'endOffset' => 25, 'fingerprint' => 'invalid', 'reason' => 'No longer safe'],
+        ['cwe' => 95, 'startLine' => 3, 'endLine' => 5, 'file' => $event['file'], 'line' => 6, 'startOffset' => 20, 'endOffset' => 25, 'fingerprint' => $matchingFingerprint, 'reason' => 'safe'],
     ];
 
     $errors = $this->processEvents([$event], $ignores);
 
     expect(array_map(static fn ($error): string => $error->getIdentifier(), $errors))
         ->toBe([
-            'phpstanCwe.ignoreFingerprint',
-            'phpstanCwe.ignoreReason',
             'phpstanCwe.cwe95',
             'phpstanCwe.ignoreUnmatched',
+            'phpstanCwe.ignoreFingerprint',
+            'phpstanCwe.ignoreReason',
         ])
         ->and(array_map(static fn ($error): int => $error->getLine(), $errors))
-        ->toBe([5, 6, 4, 3]);
+        ->toBe([4, 3, 5, 6]);
 });
 
 it('binds each ignore to one finding in its statement', function (int $ignoreStart, int $ignoreEnd, array $expectedLines): void {
     $first = cwe95Event();
     $second = cwe95Event(['offset' => 30, 'line' => 6]);
-    $fingerprint = Cwe95Fingerprint::make($first['file'], $first['scope'], $first['expression'], []);
+    $fingerprint = cwe95Fingerprint($first['file'], $first['scope'], $first['expression'], []);
     $ignore = [
+        'cwe' => 95,
+        'startLine' => 5,
+        'endLine' => 7,
         'file' => $first['file'],
         'line' => 5,
         'startOffset' => $ignoreStart,
@@ -227,9 +241,9 @@ it('binds each ignore to one finding in its statement', function (int $ignoreSta
 ]);
 
 it('keeps fingerprints stable for the same sources and changes them when sources change', function (): void {
-    $first = Cwe95Fingerprint::make('/tmp/file.php', 'Example::run', 'eval($code)', ['php:$_GET["code"]']);
-    $same = Cwe95Fingerprint::make('/tmp/file.php', 'Example::run', 'eval($code)', ['php:$_GET["code"]']);
-    $different = Cwe95Fingerprint::make('/tmp/file.php', 'Example::run', 'eval($code)', ['php:$_POST["code"]']);
+    $first = cwe95Fingerprint('/tmp/file.php', 'Example::run', 'eval($code)', ['php:$_GET["code"]']);
+    $same = cwe95Fingerprint('/tmp/file.php', 'Example::run', 'eval($code)', ['php:$_GET["code"]']);
+    $different = cwe95Fingerprint('/tmp/file.php', 'Example::run', 'eval($code)', ['php:$_POST["code"]']);
 
     expect($first)->toBe($same)
         ->and($first)->not->toBe($different)
@@ -250,8 +264,8 @@ it('uses all fingerprint inputs and sorts source names', function (): void {
     $sources = ['php:$_POST["code"]', 'php:$_GET["code"]'];
     $expected = hash('sha256', "phpstanCwe.cwe95\0/tmp/code.php\0Example::run\0eval(\$code)\0php:\$_GET[\"code\"]|php:\$_POST[\"code\"]");
 
-    expect(Cwe95Fingerprint::make('/tmp/code.php', 'Example::run', 'eval($code)', $sources))->toBe($expected)
-        ->and(Cwe95Fingerprint::make('/tmp/code.php', 'Example::run', 'eval($code)', array_reverse($sources)))->toBe($expected);
+    expect(cwe95Fingerprint('/tmp/code.php', 'Example::run', 'eval($code)', $sources))->toBe($expected)
+        ->and(cwe95Fingerprint('/tmp/code.php', 'Example::run', 'eval($code)', array_reverse($sources)))->toBe($expected);
 });
 
 it('gives lexical closures exact source-order identities and excludes their boundaries', function (): void {
@@ -327,8 +341,11 @@ it('keeps direct input rating when a sink also has an assigned input', function 
 it('matches two-word reasons and consumes each ignore once before continuing reports', function (): void {
     $first = cwe95Event();
     $second = cwe95Event(['offset' => 40, 'line' => 8]);
-    $fingerprint = Cwe95Fingerprint::make($first['file'], $first['scope'], $first['expression'], []);
+    $fingerprint = cwe95Fingerprint($first['file'], $first['scope'], $first['expression'], []);
     $ignore = [
+        'cwe' => 95,
+        'startLine' => 5,
+        'endLine' => 7,
         'file' => $first['file'], 'line' => 3, 'startOffset' => 10, 'endOffset' => 20,
         'fingerprint' => $fingerprint, 'reason' => 'Reviewed code',
     ];
@@ -344,12 +361,13 @@ it('continues past files whose ignore data has already been processed', function
     $firstFile = __DIR__ . '/../fixtures/CWE-95/cwe95.php';
     $secondFile = __DIR__ . '/../fixtures/CWE-95/stale-ignore.php';
     $ignore = [
+        'cwe' => 95, 'startLine' => 3, 'endLine' => 5,
         'file' => $secondFile, 'line' => 3, 'startOffset' => 10, 'endOffset' => 20,
         'fingerprint' => str_repeat('a', 64), 'reason' => 'Reviewed code',
     ];
     $node = new CollectedDataNode([
-        $firstFile => [Cwe95Collector::class => [null], Cwe95IgnoreCollector::class => [null]],
-        $secondFile => [Cwe95IgnoreCollector::class => [$ignore]],
+        $firstFile => [Cwe95Collector::class => [null], CweIgnoreCollector::class => [null]],
+        $secondFile => [CweIgnoreCollector::class => [[$ignore]]],
     ], false);
     $errors = (new Cwe95Rule())->processNode($node, $this->createStub(Scope::class));
 
@@ -370,6 +388,9 @@ it('continues past low probability findings to report later input', function ():
 it('reports stale ignores when a file has no collected eval events', function (): void {
     $file = __DIR__ . '/../fixtures/CWE-95/stale-ignore.php';
     $ignore = [
+        'cwe' => 95,
+        'startLine' => 3,
+        'endLine' => 5,
         'file' => $file,
         'line' => 3,
         'startOffset' => 20,
@@ -379,7 +400,7 @@ it('reports stale ignores when a file has no collected eval events', function ()
     ];
     $rule = new Cwe95Rule();
     $node = new CollectedDataNode([
-        $file => [Cwe95IgnoreCollector::class => [null, $ignore]],
+        $file => [CweIgnoreCollector::class => [null, [$ignore]]],
     ], false);
     $errors = $rule->processNode($node, $this->createStub(Scope::class));
 

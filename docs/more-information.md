@@ -174,21 +174,21 @@ Run the analysis from your project directory:
 vendor/bin/phpstan analyse --configuration=phpstan.neon
 ```
 
-The identifier is `phpstanCwe.cwe306`. An inline ignore must give a reason
-with at least two words:
+The identifier is `phpstanCwe.cwe306`. A package ignore must have the
+fingerprint from the report tip and a reason with at least two words:
 
 ```php
-// @phpstan-ignore phpstanCwe.cwe306 (External gateway authenticates callers)
+// @phpstan-ignore phpstanCwe.cwe306.<fingerprint> (External gateway authenticates callers)
 Route::post('/accounts/delete', [AccountController::class, 'destroy']);
 ```
 
-A missing or short reason produces a non-ignorable
-`phpstanCwe.ignoreReason` error.
+A bad fingerprint or a short reason produces a `phpstanCwe.ignoreFingerprint`
+or `phpstanCwe.ignoreReason` error.
 
 > [!WARNING]
-> The reason check applies only to identifier-specific inline ignore annotations. 
-> Baselines, global `ignoreErrors`, and identifier-free line ignores can suppress 
-> findings without a reason. Review these settings separately.
+> The package does not check native `@phpstan-ignore` comments, baselines, or
+> global `ignoreErrors`. PHPStan handles them, and they can suppress findings
+> without a reason. Review these settings separately.
 
 ### Important detection limitations
 
@@ -241,8 +241,9 @@ Each report gives a CWE number, a reason, a severity, a probability score,
 and a link to the MITRE CWE site. Reports are ignorable PHPStan errors.
 The stable identifiers are `phpstanCwe.cwe78`, `phpstanCwe.cwe79`,
 `phpstanCwe.cwe89`, and `phpstanCwe.cwe306`.
-Both CWE-89 rules use `phpstanCwe.cwe89`. CWE-78 and CWE-306 inline ignore
-comments must include a reason with at least two words. A short reason is
+Both CWE-89 rules use `phpstanCwe.cwe89`. Every rule supports
+`@phpstan-ignore` with a fingerprint and a reason of at least two words.
+Read the [shared ignore guide](../src/Ignore/CweIgnore.md). A short reason is
 reported with `phpstanCwe.ignoreReason`.
 The same data is in the PHPStan error metadata.
 

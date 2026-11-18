@@ -974,6 +974,8 @@ PHP);
     expect($reports)->toBe([[
         'file' => 'routes.php',
         'line' => 8,
+        'endLine' => 8,
+        'identity' => "delete('/erase') -> App\\AccountController::destroy",
         'operation' => 'eraseAccounts',
         'operationLine' => 5,
         'probability' => 100,
@@ -1667,8 +1669,9 @@ PHP;
     $nodes = (new ParserFactory())->createForNewestSupportedVersion()->parse(str_replace('CONTROLLER', $controller, $source));
     $reports = (new LaravelAuthenticationScanner(['App\AccountController::destroy']))->scan(['routes.php' => $nodes]);
     expect($reports)->toBe([[
-        'file' => 'routes.php', 'line' => 5, 'operation' => 'App\AccountController::destroy',
-        'operationLine' => 5, 'probability' => $hasBody ? 60 : 40,
+        'file' => 'routes.php', 'line' => 5, 'endLine' => 5,
+        'identity' => "post('/erase') -> App\\AccountController::destroy",
+        'operation' => 'App\AccountController::destroy', 'operationLine' => 5, 'probability' => $hasBody ? 60 : 40,
     ]]);
 })->with([true, false]);
 

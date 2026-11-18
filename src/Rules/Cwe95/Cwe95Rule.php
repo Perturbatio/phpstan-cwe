@@ -5,18 +5,20 @@ declare(strict_types=1);
 namespace Perturbatio\PhpstanCwe\Rules\Cwe95;
 
 use Perturbatio\PhpstanCwe\CweReport;
+use Perturbatio\PhpstanCwe\Ignore\CweFingerprint;
+use Perturbatio\PhpstanCwe\Ignore\CweIgnoreCollector;
+use Perturbatio\PhpstanCwe\Ignore\CweIgnoreSet;
 use Perturbatio\PhpstanCwe\LocalAssignmentFlow;
 use PhpParser\Node;
 use PHPStan\Analyser\Scope;
 use PHPStan\Node\CollectedDataNode;
 use PHPStan\Rules\IdentifierRuleError;
 use PHPStan\Rules\Rule;
-use PHPStan\Rules\RuleErrorBuilder;
 
 /**
  * @phpstan-import-type Cwe95Event from Cwe95Collector
  * @phpstan-import-type Cwe95FlowEvent from Cwe95Collector
- * @phpstan-import-type Cwe95IgnoreEvent from Cwe95IgnoreCollector
+ * @phpstan-import-type CweIgnoreEvent from CweIgnoreCollector
  * @implements Rule<CollectedDataNode>
  */
 final class Cwe95Rule implements Rule
@@ -60,8 +62,7 @@ final class Cwe95Rule implements Rule
         $reports = [];
         /** @var array<string, list<Cwe95Event|null>> $eventsByFile */
         $eventsByFile = $node->get(Cwe95Collector::class);
-        /** @var array<string, list<Cwe95IgnoreEvent|null>> $ignoresByFile */
-        $ignoresByFile = $node->get(Cwe95IgnoreCollector::class);
+        $ignoresByFile = CweIgnoreCollector::fromNode($node, 95);
 
         foreach ($eventsByFile as $file => $events) {
             $reports = array_merge(
@@ -82,66 +83,24 @@ final class Cwe95Rule implements Rule
 
     /**
      * @param list<Cwe95Event|null> $events
-     * @param list<Cwe95IgnoreEvent|null> $ignores
+     * @param list<CweIgnoreEvent> $ignores
      * @return list<IdentifierRuleError>
      */
     private function reportsForFile(string $file, array $events, array $ignores): array
     {
         $reports = [];
-        $validIgnores = [];
-        $matchedIgnores = [];
-
-        foreach ($ignores as $index => $ignore) {
-            if ($ignore === null) {
-                continue;
-            }
-
-            $hasValidFingerprint = preg_match('/^[a-f0-9]{64}$/', $ignore['fingerprint']) === 1;
-            $hasValidReason = $this->wordCount($ignore['reason']) >= 2;
-            if (!$hasValidFingerprint) {
-                $reports[] = RuleErrorBuilder::message(
-                    'CWE-95 ignore must include a 64-character fingerprint.',
-                )
-                    ->identifier('phpstanCwe.ignoreFingerprint')
-                    ->file($file)
-                    ->line($ignore['line'])
-                    ->build();
-            }
-            if (!$hasValidReason) {
-                $reports[] = RuleErrorBuilder::message(
-                    'CWE-95 ignore requires a reason with at least two words.',
-                )
-                    ->identifier('phpstanCwe.ignoreReason')
-                    ->file($file)
-                    ->line($ignore['line'])
-                    ->build();
-            }
-            if ($hasValidFingerprint && $hasValidReason) {
-                $validIgnores[$index] = true;
-            }
-        }
+        $ignoreSet = new CweIgnoreSet(95, $file, $ignores);
 
         foreach (LocalAssignmentFlow::sinks($this->isolateClosureScopes($events), $this->resolveFacts(...)) as [$event, $facts]) {
-            $fingerprint = Cwe95Fingerprint::make(
+            $sources = $facts['sources'];
+            sort($sources);
+            $fingerprint = CweFingerprint::make(95, [
                 $file,
                 $event['scope'],
                 $event['expression'],
-                $facts['sources'],
-            );
-            $isIgnored = false;
-            foreach ($ignores as $index => $ignore) {
-                if ($ignore === null || ($matchedIgnores[$index] ?? false)
-                    || $ignore['fingerprint'] !== $fingerprint
-                    || $event['offset'] < $ignore['startOffset']
-                    || $event['offset'] > $ignore['endOffset']
-                ) {
-                    continue;
-                }
-
-                $matchedIgnores[$index] = true;
-                $isIgnored = $isIgnored || ($validIgnores[$index] ?? false);
-            }
-            if ($isIgnored) {
+                implode('|', $sources),
+            ]);
+            if ($ignoreSet->suppressesAt($fingerprint, $event['offset'])) {
                 continue;
             }
             [$severity, $probability, $reason] = $this->rating($facts, $event['sources'] !== []);
@@ -156,32 +115,12 @@ final class Cwe95Rule implements Rule
                 $probability,
                 $file,
                 $event['line'],
-                tip: sprintf(
-                    'Only ignore this finding if you have checked that the evaluated code is safe. Give a reason with at least two words: // @phpstan-cwe-ignore phpstanCwe.cwe95[%s] (<reason>)',
-                    $fingerprint,
-                ),
+                tip: CweIgnoreSet::tip(95, $fingerprint, 'the evaluated code'),
                 fingerprint: $fingerprint,
             );
         }
 
-        foreach ($ignores as $index => $ignore) {
-            if ($ignore === null || !preg_match('/^[a-f0-9]{64}$/', $ignore['fingerprint'])) {
-                continue;
-            }
-            if ($matchedIgnores[$index] ?? false) {
-                continue;
-            }
-
-            $reports[] = RuleErrorBuilder::message(
-                'CWE-95 ignore fingerprint does not match a finding. Review or remove this ignore.',
-            )
-                ->identifier('phpstanCwe.ignoreUnmatched')
-                ->file($file)
-                ->line($ignore['line'])
-                ->build();
-        }
-
-        return $reports;
+        return array_merge($reports, $ignoreSet->reports());
     }
 
     /**
@@ -295,12 +234,5 @@ final class Cwe95Rule implements Rule
             self::getLowestProbability(),
             'The code calls eval(), but no external input is known. Review the evaluated code and its source.',
         ];
-    }
-
-    private function wordCount(string $reason): int
-    {
-        preg_match_all('/[\p{L}\p{N}]+/u', $reason, $matches);
-
-        return count($matches[0]);
     }
 }

@@ -16,13 +16,13 @@ Use one PHP directive style for all rules:
 single line comment:
 
 ```php
-// @phpstan-cwe-ignore phpstanCwe.cwe79[<fingerprint>] (Reviewed safe output)
+// @phpstan-ignore phpstanCwe.cwe79.<fingerprint> (Reviewed safe output)
 ```
 
 multiline comment:
 
 ```php
-/* @phpstan-cwe-ignore phpstanCwe.cwe79[<fingerprint>] (Reviewed safe output) */
+/* @phpstan-ignore phpstanCwe.cwe79.<fingerprint> (Reviewed safe output) */
 ```
 
 Use the equivalent Blade comment for templates.

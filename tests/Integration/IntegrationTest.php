@@ -5,18 +5,19 @@ declare(strict_types=1);
 use Perturbatio\PhpstanCwe\Blade\AnalysedFileCollector;
 use Perturbatio\PhpstanCwe\Blade\BladeTemplateScanner;
 use Perturbatio\PhpstanCwe\CweReport;
+use Perturbatio\PhpstanCwe\Ignore\CweFingerprint;
+use Perturbatio\PhpstanCwe\Ignore\CweIgnoreCollector;
+use Perturbatio\PhpstanCwe\Ignore\CweIgnoreSet;
+use Perturbatio\PhpstanCwe\Ignore\ExpressionText;
 use Perturbatio\PhpstanCwe\RequestInput;
 use Perturbatio\PhpstanCwe\Rules\Cwe79\Cwe79BladeRule;
 use Perturbatio\PhpstanCwe\Rules\Cwe79\Cwe79Rule;
 use Perturbatio\PhpstanCwe\Rules\Cwe78\Cwe78Collector;
-use Perturbatio\PhpstanCwe\Rules\Cwe78\Cwe78IgnoreCollector;
 use Perturbatio\PhpstanCwe\Rules\Cwe78\Cwe78Rule;
 use Perturbatio\PhpstanCwe\Rules\Cwe95\Cwe95Collector;
-use Perturbatio\PhpstanCwe\Rules\Cwe95\Cwe95Fingerprint;
-use Perturbatio\PhpstanCwe\Rules\Cwe95\Cwe95IgnoreCollector;
 use Perturbatio\PhpstanCwe\Rules\Cwe95\Cwe95Rule;
 use Perturbatio\PhpstanCwe\Rules\Cwe89\Cwe89LaravelCollector;
-use Perturbatio\PhpstanCwe\Rules\Cwe89\Cwe89LaravelRule;
+use Perturbatio\PhpstanCwe\Rules\Cwe89\Cwe89Collector;
 use Perturbatio\PhpstanCwe\Rules\Cwe89\Cwe89Rule;
 
 // These tests check the package in a separate PHPStan process.
@@ -29,45 +30,17 @@ covers(
     Cwe79BladeRule::class,
     Cwe79Rule::class,
     Cwe78Collector::class,
-    Cwe78IgnoreCollector::class,
     Cwe78Rule::class,
     Cwe95Collector::class,
-    Cwe95Fingerprint::class,
-    Cwe95IgnoreCollector::class,
+    CweFingerprint::class,
+    CweIgnoreCollector::class,
+    CweIgnoreSet::class,
+    ExpressionText::class,
     Cwe95Rule::class,
     Cwe89LaravelCollector::class,
-    Cwe89LaravelRule::class,
+    Cwe89Collector::class,
     Cwe89Rule::class,
 );
-
-function analyseWithConfig(string $config, string $fixture = 'tests/fixtures/shared/integration.php'): array
-{
-    $root = dirname(__DIR__, 2);
-    $process = proc_open(
-        [PHP_BINARY, $root . '/vendor/bin/phpstan', 'analyse', str_starts_with($fixture, '/') ? $fixture : $root . '/' . $fixture,
-            '--configuration=' . $root . '/' . $config, '--level=0', '--no-progress', '--error-format=json'],
-        [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
-        $pipes,
-        $root,
-    );
-    if (!is_resource($process)) {
-        throw new RuntimeException('PHPStan did not start.');
-    }
-
-    fclose($pipes[0]);
-    $output = stream_get_contents($pipes[1]);
-    stream_get_contents($pipes[2]);
-    fclose($pipes[1]);
-    fclose($pipes[2]);
-    $status = proc_close($process);
-
-    $result = json_decode($output, true, 512, JSON_THROW_ON_ERROR);
-
-    expect($result['errors'])->toBe([])
-        ->and($status)->toBeIn([0, 1]);
-
-    return $result;
-}
 
 it('loads the Laravel authentication rule with each package configuration', function (string $config): void {
     $result = analyseWithConfig($config, 'tests/fixtures/CWE-306/laravel.php');
@@ -195,14 +168,17 @@ it('reports a critical DELETE controller action without authentication middlewar
         ]);
 })->with(['tests/fixtures/CWE-306/laravel.neon', 'tests/fixtures/CWE-306/extension.neon']);
 
-it('requires a reason with more than one word for Laravel authentication ignores', function (): void {
+it('reports invalid package ignores and keeps the Laravel authentication findings', function (): void {
     $result = analyseWithConfig('tests/fixtures/CWE-306/laravel.neon', 'tests/fixtures/CWE-306/ignore.php');
     $messages = array_values($result['files'])[0]['messages'];
+    $identifiers = array_column($messages, 'identifier');
 
-    expect($result['totals']['file_errors'])->toBe(2)
-        ->and(array_column($messages, 'identifier'))->toBe(['phpstanCwe.ignoreReason', 'phpstanCwe.ignoreReason'])
-        ->and(array_column($messages, 'message'))->toBe(array_fill(0, 2, 'CWE-306 ignore requires a reason with at least two words.'))
-        ->and(array_column($messages, 'ignorable'))->toBe([false, false]);
+    expect(array_count_values($identifiers))->toEqual([
+        'phpstanCwe.ignoreUnmatched' => 2,
+        'phpstanCwe.ignoreReason' => 2,
+        'phpstanCwe.cwe306' => 3,
+        'phpstanCwe.ignoreFingerprint' => 1,
+    ]);
 });
 
 it('detects local object calls through both package configurations', function (string $config): void {
@@ -254,7 +230,7 @@ it('loads a single rule when selected', function (): void {
 });
 
 it('loads the CWE-95 rule from its PHP configuration and the full extension', function (string $config): void {
-    $result = analyseWithConfig($config, 'tests/fixtures/CWE-95/cwe95.php');
+    $result = analyseWithConfig($config, 'tests/fixtures/CWE-95/cwe95.php', true);
     $messages = array_values($result['files'])[0]['messages'];
 
     expect($result['totals']['file_errors'])->toBe(6)
@@ -273,7 +249,7 @@ it('loads the CWE-95 rule from its PHP configuration and the full extension', fu
 ]);
 
 it('loads Laravel request input from the CWE-95 Laravel configuration', function (): void {
-    $result = analyseWithConfig('config/cwe95-laravel.neon', 'tests/fixtures/CWE-95/laravel.php');
+    $result = analyseWithConfig('config/cwe95-laravel.neon', 'tests/fixtures/CWE-95/laravel.php', true);
     $messages = array_values($result['files'])[0]['messages'];
 
     expect($result['totals']['file_errors'])->toBe(2)
@@ -284,7 +260,7 @@ it('loads Laravel request input from the CWE-95 Laravel configuration', function
 });
 
 it('reports a stale CWE-95 fingerprint ignore', function (): void {
-    $result = analyseWithConfig('config/cwe95.neon', 'tests/fixtures/CWE-95/stale-ignore.php');
+    $result = analyseWithConfig('config/cwe95.neon', 'tests/fixtures/CWE-95/stale-ignore.php', true);
     $messages = array_values($result['files'])[0]['messages'];
 
     expect($result['totals']['file_errors'])->toBe(1)
@@ -295,7 +271,7 @@ it('reports a stale CWE-95 fingerprint ignore', function (): void {
 });
 
 it('keeps closure fingerprints and ratings stable across PHPStan runs', function (string $config): void {
-    $first = analyseWithConfig($config, 'tests/fixtures/CWE-95/closures.php');
+    $first = analyseWithConfig($config, 'tests/fixtures/CWE-95/closures.php', true);
     $messages = array_values(array_filter(
         array_values($first['files'])[0]['messages'],
         static fn (array $message): bool => $message['identifier'] === 'phpstanCwe.cwe95',
@@ -309,7 +285,7 @@ it('keeps closure fingerprints and ratings stable across PHPStan runs', function
     expect($messages[7]['message'])->toBe($messages[5]['message']);
 
     for ($run = 0; $run < 2; $run++) {
-        $next = analyseWithConfig($config, 'tests/fixtures/CWE-95/closures.php');
+        $next = analyseWithConfig($config, 'tests/fixtures/CWE-95/closures.php', true);
         expect($next)->toBe($first);
     }
 })->with(['config/cwe95-laravel.neon', 'tests/fixtures/shared/extension.neon']);
@@ -323,19 +299,19 @@ it('keeps closure ignores valid after comments and blank lines change', function
     try {
         $code = file_get_contents(__DIR__ . '/../fixtures/CWE-95/closures.php');
         file_put_contents($fixture, $code);
-        $first = analyseWithConfig($config, $fixture);
+        $first = analyseWithConfig($config, $fixture, true);
         $messages = array_values(array_filter(
             array_values($first['files'])[0]['messages'],
             static fn (array $message): bool => $message['identifier'] === 'phpstanCwe.cwe95',
         ));
         expect($messages)->toHaveCount(8)
-            ->and(analyseWithConfig($config, $fixture))->toBe($first);
+            ->and(analyseWithConfig($config, $fixture, true))->toBe($first);
 
         $withIgnores = str_replace(
             ["    eval(request('code_2'));", '    eval($code); // Report: Assigned'],
             [
-                '    ' . substr($messages[0]['tip'], strpos($messages[0]['tip'], '// @phpstan-cwe-ignore')) . "\n    eval(request('code_2'));",
-                '    ' . substr($messages[1]['tip'], strpos($messages[1]['tip'], '// @phpstan-cwe-ignore')) . "\n    eval(\$code); // Report: Assigned",
+                '    ' . substr($messages[0]['tip'], strpos($messages[0]['tip'], '// @phpstan-ignore')) . "\n    eval(request('code_2'));",
+                '    ' . substr($messages[1]['tip'], strpos($messages[1]['tip'], '// @phpstan-ignore')) . "\n    eval(\$code); // Report: Assigned",
             ],
             $code,
         );
@@ -343,7 +319,7 @@ it('keeps closure ignores valid after comments and blank lines change', function
         $withIgnores = str_replace("<?php\n", "<?php\n\n// Extra review comment.\n\n", $withIgnores);
         file_put_contents($fixture, $withIgnores);
 
-        $ignored = analyseWithConfig($config, $fixture);
+        $ignored = analyseWithConfig($config, $fixture, true);
         $remaining = array_values($ignored['files'])[0]['messages'];
         expect(array_column($remaining, 'identifier'))->not->toContain('phpstanCwe.ignoreUnmatched');
         $remainingFindings = array_values(array_filter(
@@ -351,10 +327,10 @@ it('keeps closure ignores valid after comments and blank lines change', function
             static fn (array $message): bool => $message['identifier'] === 'phpstanCwe.cwe95',
         ));
         expect(array_column($remainingFindings, 'message'))->toBe(array_column(array_slice($messages, 2), 'message'))
-            ->and(analyseWithConfig($config, $fixture))->toBe($ignored);
+            ->and(analyseWithConfig($config, $fixture, true))->toBe($ignored);
 
         file_put_contents($fixture, str_replace("\$request->input('code')", "\$request->input('changed')", $withIgnores));
-        $changed = analyseWithConfig($config, $fixture);
+        $changed = analyseWithConfig($config, $fixture, true);
         expect(array_column(array_values($changed['files'])[0]['messages'], 'identifier'))
             ->toContain('phpstanCwe.ignoreUnmatched', 'phpstanCwe.cwe95');
     } finally {
@@ -363,7 +339,7 @@ it('keeps closure ignores valid after comments and blank lines change', function
 })->with(['config/cwe95-laravel.neon', 'tests/fixtures/shared/extension.neon']);
 
 it('reports missing CWE-95 ignore reasons and shows a copyable ignore tip', function (string $config): void {
-    $result = analyseWithConfig($config, 'tests/fixtures/CWE-95/missing-ignore-reason.php');
+    $result = analyseWithConfig($config, 'tests/fixtures/CWE-95/missing-ignore-reason.php', true);
     $messages = array_values($result['files'])[0]['messages'];
     $reasonErrors = array_values(array_filter($messages, static fn (array $message): bool => $message['identifier'] === 'phpstanCwe.ignoreReason'));
     $findings = array_values(array_filter($messages, static fn (array $message): bool => $message['identifier'] === 'phpstanCwe.cwe95'));
@@ -380,7 +356,7 @@ it('reports missing CWE-95 ignore reasons and shows a copyable ignore tip', func
     expect($matches)->toHaveCount(2)
         ->and($findings[0]['tip'])->toContain(
             'Only ignore this finding if you have checked that the evaluated code is safe.',
-            sprintf('// @phpstan-cwe-ignore phpstanCwe.cwe95[%s] (<reason>)', $matches[1]),
+            sprintf('// @phpstan-ignore phpstanCwe.cwe95.%s (<reason>)', $matches[1]),
         );
 })->with(['config/cwe95.neon', 'tests/fixtures/shared/extension.neon']);
 
@@ -510,14 +486,14 @@ it('keeps Laravel findings at the minimum score and filters weaker findings', fu
         ->and($messages[0]['message'])->toContain('Probability: 95%.');
 });
 
-it('requires at least two words in a CWE-78 ignore reason', function (): void {
+it('reports a CWE-78 ignore that does not match a finding or has a short reason', function (): void {
     $result = analyseWithConfig('config/cwe78.neon', 'tests/fixtures/CWE-78/ignore.php');
     $messages = array_values($result['files'])[0]['messages'];
+    $reports = array_values(array_filter($messages, static fn (array $message): bool => $message['identifier'] !== 'phpstanCwe.cwe78'));
 
-    expect($result['totals']['file_errors'])->toBe(1)
-        ->and(array_column($messages, 'identifier'))->toBe(['phpstanCwe.ignoreReason'])
-        ->and(array_column($messages, 'line'))->toBe([3])
-        ->and($messages[0]['message'])->toBe('CWE-78 ignore requires a reason with at least two words.');
+    expect(array_column($reports, 'identifier'))->toBe(['phpstanCwe.ignoreUnmatched', 'phpstanCwe.ignoreReason', 'phpstanCwe.ignoreUnmatched'])
+        ->and($reports[1]['message'])->toBe('CWE-78 ignore requires a reason with at least two words.')
+        ->and(array_column($reports, 'line'))->toBe([3, 3, 6]);
 });
 
 it('loads the Laravel SQL rule from its public configuration', function (): void {
@@ -550,7 +526,8 @@ it('loads the Laravel SQL rule from its public configuration', function (): void
             : $expectedRequestMessage)
             ->and($message['identifier'])->toBe('phpstanCwe.cwe89')
             ->and($message['ignorable'])->toBeTrue()
-            ->and($message['tip'])->toBe('If you use wrap() for an SQL identifier, verify that PHPStan knows the argument is a string and the receiver is Illuminate\Database\Grammar or a subclass. Add or correct parameter types where needed. A string type alone does not make raw SQL safe. Use bound parameters for values.');
+            ->and($message['tip'])->toStartWith('If you use wrap() for an SQL identifier, verify that PHPStan knows the argument is a string and the receiver is Illuminate\Database\Grammar or a subclass. Add or correct parameter types where needed. A string type alone does not make raw SQL safe. Use bound parameters for values.' . "\n")
+            ->and($message['tip'])->toMatch('/\/\/ @phpstan-ignore phpstanCwe\.cwe89\.[a-f0-9]{64} \(<reason>\)$/');
     }
 });
 
@@ -609,7 +586,7 @@ it('reports Blade raw echoes at the view file and line', function (): void {
                     'https://cwe.mitre.org/data/definitions/79.html'
                 )
                 ->and($message['ignorable'])->toBeTrue()
-                ->and($message['tip'])->toBe('Only if you are sure that this value is safe HTML, put {{-- @phpstan-ignore phpstanCwe.cwe79 (Reason) --}} immediately BEFORE this raw echo. Replace "Reason" with the reason.');
+                ->and($message['tip'])->toMatch('/^Only if you are sure that this value is safe HTML, put \{\{-- @phpstan-ignore phpstanCwe\.cwe79\.[a-f0-9]{64} \(<reason>\) --\}\} immediately BEFORE this raw echo\. Give a reason with at least two words\.$/');
         }
     }
 });
@@ -627,15 +604,16 @@ it('filters Blade reports below the minimum probability', function (): void {
     expect($result['totals']['file_errors'])->toBe(0);
 });
 
-it('ignores one Blade echo and reports unused ignore comments at their lines', function (): void {
+it('reports Blade raw echoes and malformed package ignores', function (): void {
     $result = analyseWithConfig('tests/fixtures/CWE-79/blade-ignores.neon');
     $messages = array_values($result['files'])[0]['messages'];
-    $linesByIdentifier = [];
 
+    $linesByIdentifier = [];
     foreach ($messages as $message) {
         $linesByIdentifier[$message['identifier']][] = $message['line'];
     }
 
-    expect($linesByIdentifier['phpstanCwe.cwe79'])->toBe([3, 5, 8, 11, 14, 18, 20, 23, 24, 26])
-        ->and($linesByIdentifier['phpstanCwe.ignoreUnmatched'])->toBe([6, 9, 12, 21]);
+    expect($linesByIdentifier['phpstanCwe.cwe79'])->toEqualCanonicalizing([2, 3, 4, 5, 8, 11, 14, 18, 20, 23, 24, 24, 26])
+        ->and($linesByIdentifier['phpstanCwe.ignoreFingerprint'])->toEqualCanonicalizing([1, 4, 6, 9, 12, 21, 24])
+        ->and($linesByIdentifier['phpstanCwe.ignoreReason'])->toEqualCanonicalizing([4, 6, 9, 12, 21, 24]);
 });

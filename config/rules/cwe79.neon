@@ -1,4 +1,8 @@
 services:
+    phpstanCwe.ignoreCollector:
+        class: Perturbatio\PhpstanCwe\Ignore\CweIgnoreCollector
+        tags:
+            - phpstan.collector
     -
         class: Perturbatio\PhpstanCwe\Rules\Cwe79\Cwe79Collector
         tags:

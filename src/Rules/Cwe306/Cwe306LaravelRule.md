@@ -457,22 +457,22 @@ An unresolved control does not prove that the route is available to guests.
 
 ## Ignore one finding
 
-Put a PHPStan ignore immediately before the route. The reason must have
-at least two words:
+Put a package ignore immediately before the route. Copy the fingerprint from
+the report tip. The reason must have at least two words:
 
 ```php
-// @phpstan-ignore phpstanCwe.cwe306 (External gateway authenticates callers)
+// @phpstan-ignore phpstanCwe.cwe306.<fingerprint> (External gateway authenticates callers)
 Route::post('/accounts/delete', [AccountController::class, 'destroy']);
 ```
 
-A missing reason, punctuation alone, or a one-word reason produces a
-non-ignorable `phpstanCwe.ignoreReason` error. A reason is checked even when
-the minimum score filters the CWE finding.
+A bad fingerprint, a missing or short reason, or an ignore that matches no
+route produces a `phpstanCwe.ignoreFingerprint`, `phpstanCwe.ignoreReason`,
+or `phpstanCwe.ignoreUnmatched` error. The rule matches an ignore before it
+filters by the minimum score.
 
-This check applies to identifier-specific inline ignores. PHPStan's global
-`ignoreErrors`, baselines, and identifier-free line ignores are separate
-suppression mechanisms. They do not have a reason field that this rule can
-enforce. Use the form above to record a reason.
+The rule does not read native `@phpstan-ignore` comments. PHPStan's global
+`ignoreErrors`, baselines, and native ignore annotations are separate suppression
+mechanisms. They do not have a fingerprint that this rule can check.
 
 ## Known limitations
 
@@ -510,3 +510,5 @@ enforce. Use the form above to record a reason.
 - A type, a method name, or a request value does not prove that a value is safe.
 
 Full CWE entry: https://cwe.mitre.org/data/definitions/306.html.
+
+For fingerprint-based ignore annotations, read the [shared ignore guide](../../Ignore/CweIgnore.md).

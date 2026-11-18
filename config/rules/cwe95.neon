@@ -1,10 +1,10 @@
 services:
-    phpstanCwe.cwe95Collector:
-        class: Perturbatio\PhpstanCwe\Rules\Cwe95\Cwe95Collector
+    phpstanCwe.ignoreCollector:
+        class: Perturbatio\PhpstanCwe\Ignore\CweIgnoreCollector
         tags:
             - phpstan.collector
-    -
-        class: Perturbatio\PhpstanCwe\Rules\Cwe95\Cwe95IgnoreCollector
+    phpstanCwe.cwe95Collector:
+        class: Perturbatio\PhpstanCwe\Rules\Cwe95\Cwe95Collector
         tags:
             - phpstan.collector
     -

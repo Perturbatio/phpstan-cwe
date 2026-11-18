@@ -6,7 +6,9 @@ namespace Perturbatio\PhpstanCwe\Rules\Cwe306;
 
 use Perturbatio\PhpstanCwe\Blade\AnalysedFileCollector;
 use Perturbatio\PhpstanCwe\CweReport;
-use Perturbatio\PhpstanCwe\IgnoreReason;
+use Perturbatio\PhpstanCwe\Ignore\CweFingerprint;
+use Perturbatio\PhpstanCwe\Ignore\CweIgnoreCollector;
+use Perturbatio\PhpstanCwe\Ignore\CweIgnoreSet;
 use PhpParser\Node;
 use PHPStan\Analyser\Scope;
 use PHPStan\Node\CollectedDataNode;
@@ -45,12 +47,17 @@ final class Cwe306LaravelRule implements Rule
         // can be in different files. Do not load or execute application code.
         foreach (array_keys($node->get(AnalysedFileCollector::class)) as $file) {
             $files[$file] = $this->parser->parseFile($file);
-            // Check ignore reasons before filtering scores. A filtered finding
-            // must not allow an invalid reason to pass without an error.
-            array_push($reports, ...IgnoreReason::reports($files[$file], $file, 'phpstanCwe.cwe306', 306));
+        }
+        $ignoreSets = [];
+        foreach (CweIgnoreCollector::fromNode($node, 306) as $file => $ignores) {
+            $ignoreSets[$file] = new CweIgnoreSet(306, $file, $ignores);
         }
         foreach ($this->scanner->scan($files, $node->get(ChainedCallCollector::class)) as $finding) {
-            if (!CweReport::isEnabled($this->minProbability, $finding['probability'])) {
+            $fingerprint = CweFingerprint::make(306, [$finding['file'], $finding['identity'], $finding['operation']]);
+            // Match an ignore before the score filter, so a filtered finding does not make its ignore stale.
+            if (($ignoreSets[$finding['file']] ?? null)?->suppressesLines($fingerprint, $finding['line'], $finding['endLine']) === true
+                || !CweReport::isEnabled($this->minProbability, $finding['probability'])
+            ) {
                 continue;
             }
             // Report at the route so two routes to one action remain separate.
@@ -61,8 +68,13 @@ final class Cwe306LaravelRule implements Rule
                 $finding['probability'],
                 $finding['file'],
                 $finding['line'],
-                'Require authentication before this operation. Unknown middleware and calls can contain controls that this rule cannot resolve.',
+                'Require authentication before this operation. Unknown middleware and calls can contain controls that this rule cannot resolve.'
+                    . "\n" . CweIgnoreSet::tip(306, $fingerprint, 'this route and operation'),
+                $fingerprint,
             );
+        }
+        foreach ($ignoreSets as $ignoreSet) {
+            array_push($reports, ...$ignoreSet->reports());
         }
 
         return $reports;

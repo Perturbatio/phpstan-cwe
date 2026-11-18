@@ -7,6 +7,7 @@ namespace Perturbatio\PhpstanCwe\Rules\Cwe79;
 use Perturbatio\PhpstanCwe\Blade\AnalysedFileCollector;
 use Perturbatio\PhpstanCwe\Blade\BladeTemplateScanner;
 use Perturbatio\PhpstanCwe\CweReport;
+use Perturbatio\PhpstanCwe\Ignore\CweIgnoreSet;
 use PhpParser\Node;
 use PHPStan\Analyser\Scope;
 use PHPStan\Node\CollectedDataNode;
@@ -32,11 +33,11 @@ final class Cwe79BladeRule implements Rule
         return 80;
     }
 
-    public static function getIgnoreTip(): string
+    public static function getIgnoreTip(string $fingerprint): string
     {
         return 'Only if you are sure that this value is safe HTML, put '
-            . '{{-- @phpstan-ignore phpstanCwe.cwe79 (Reason) --}} immediately BEFORE this raw echo. '
-            . 'Replace "Reason" with the reason.';
+            . sprintf('{{-- @phpstan-ignore phpstanCwe.cwe79.%s (<reason>) --}} ', $fingerprint)
+            . 'immediately BEFORE this raw echo. Give a reason with at least two words.';
     }
 
     public function getNodeType(): string
@@ -55,14 +56,20 @@ final class Cwe79BladeRule implements Rule
 
         // Report the template location, not the PHP file that starts the scan
         $errors = [];
-        foreach ($this->scanner->scan($this->directories) as $finding) {
-            if ($finding['type'] === 'unmatchedIgnore') {
-                // Tell the user when an ignore annotation does not match an echo
-                $errors[] = \PHPStan\Rules\RuleErrorBuilder::message('No Blade raw echo matches @phpstan-ignore phpstanCwe.cwe79.')
-                    ->identifier('phpstanCwe.ignoreUnmatched')
-                    ->file($finding['file'])
-                    ->line($finding['line'])
-                    ->build();
+        $findings = $this->scanner->scan($this->directories);
+        $ignoresByFile = [];
+        foreach ($findings as $finding) {
+            if ($finding['type'] === 'packageIgnore') {
+                $ignoresByFile[$finding['file']][] = $finding['ignore'];
+            }
+        }
+        $ignoreSets = [];
+        foreach ($ignoresByFile as $file => $ignores) {
+            $ignoreSets[$file] = new CweIgnoreSet(79, $file, $ignores);
+        }
+
+        foreach (array_filter($findings, static fn (array $finding): bool => $finding['type'] === 'rawEcho') as $finding) {
+            if (($ignoreSets[$finding['file']] ?? null)?->suppressesAt($finding['fingerprint'], $finding['offset']) === true) {
                 continue;
             }
             // A Blade raw echo skips the normal HTML escaping
@@ -73,8 +80,12 @@ final class Cwe79BladeRule implements Rule
                 self::getProbability(),
                 $finding['file'],
                 $finding['line'],
-                self::getIgnoreTip(),
+                self::getIgnoreTip($finding['fingerprint']),
+                $finding['fingerprint'],
             );
+        }
+        foreach ($ignoreSets as $ignoreSet) {
+            $errors = array_merge($errors, $ignoreSet->reports());
         }
 
         return $errors;

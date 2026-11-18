@@ -56,25 +56,27 @@ $code = $_GET['code']; // No report: This is not a dynamic evaluation sink.
 
 ## Fingerprint-based ignores
 
+The [shared ignore guide](../../Ignore/CweIgnore.md) describes the syntax for all rules.
+
 Each report includes a SHA-256 fingerprint. The fingerprint uses the rule
 identifier, file path, function or method name, closure position in source
 order, normalised `eval()` expression, and detected input sources.
 It does not use a line number or token position. Comments and blank lines
 do not change the fingerprint. A detected input source change
 creates a different fingerprint. A file rename also creates a different
-fingerprint. If you add, remove, or move a closure, review its ignores again.
+fingerprint. If you add, remove, or move a closure, review its ignore annotations again.
 
 Each finding has a tip with a copyable ignore comment and its fingerprint.
 Only use the ignore after you check that the evaluated code is safe. Replace
 `<reason>` with a reason that has at least two words.
 
 This is a package directive, not a PHPStan `@phpstan-ignore` directive.
-PHPStan does not accept fingerprint brackets in its native ignore syntax.
-Use `@phpstan-cwe-ignore` so that this rule can check the fingerprint and
+Put a dot between the rule identifier and the fingerprint.
+Use `@phpstan-ignore` so that this rule can check the fingerprint and
 report a missing reason.
 
 ```php
-// @phpstan-cwe-ignore phpstanCwe.cwe95[<fingerprint>] (This code uses fixed local text.)
+// @phpstan-ignore phpstanCwe.cwe95.<fingerprint> (This code uses fixed local text.)
 eval('return 1 + 1;');
 ```
 

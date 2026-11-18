@@ -27,11 +27,11 @@ output context. Review each report before you change a template.
 
 Each report has a tip that shows how to ignore it. Ignore a report only if
 you are sure that the value is safe HTML. To ignore one raw echo, put a
-Blade comment immediately before it. Use PHPStan's error identifier. You
-can add a reason in parentheses:
+Blade comment immediately before it. Use the fingerprint from the tip and a
+reason of at least two words:
 
 ```blade
-{{-- @phpstan-ignore phpstanCwe.cwe79 (This text comes from a trusted source.) --}}
+{{-- @phpstan-ignore phpstanCwe.cwe79.<fingerprint> (This text comes from a trusted source.) --}}
 {!! $trustedHtml !!}
 {!! $otherHtml !!} {{-- This raw echo still gets a report. --}}
 ```
@@ -39,10 +39,10 @@ can add a reason in parentheses:
 The comment can also be on the same line before the raw echo. Only spaces
 can separate the comment and the echo on that line. If they are on two lines,
 only spaces and one line break can separate them. A blank line or other
-template code stops the ignore annotation. An ignore annotation without a matching raw echo gets
-an error with the identifier `phpstanCwe.ignoreUnmatched`. Blade comments
-do not use PHPStan's built-in PHP comment parser. This rule applies the
-same identifier form only to Blade raw echoes.
+template code stops the ignore annotation. An ignore annotation without a
+matching raw echo gets an error with the identifier
+`phpstanCwe.ignoreUnmatched`. Blade comments do not use PHPStan's built-in PHP
+comment parser, and this rule does not read `@phpstan-ignore` in Blade.
 
 The rule scans views when PHPStan analyses at least one PHP file. Use
 `config/cwe79-blade.neon` to run only this rule. Use the `bladeDirectories`
@@ -56,5 +56,7 @@ parameters:
             - resources/views
             - packages/shop/resources/views
 ```
+
+For fingerprint-based ignore annotations, read the [shared ignore guide](../../Ignore/CweIgnore.md).
 
 Full explanation: https://cwe.mitre.org/data/definitions/79.html

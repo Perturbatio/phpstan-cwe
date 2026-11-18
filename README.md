@@ -130,15 +130,20 @@ parameters:
 Relative paths start at the current working directory. Set the list to
 `[]` to stop the Blade scan.
 
-To ignore one Blade raw echo, put a Blade comment immediately before it:
+To ignore one Blade raw echo, put a Blade comment with the fingerprint from
+the report tip immediately before it:
 
 ```blade
-{{-- @phpstan-ignore phpstanCwe.cwe79 (This value is trusted.) --}}
+{{-- @phpstan-ignore phpstanCwe.cwe79.<fingerprint> (This value is trusted.) --}}
 {!! $trustedHtml !!}
 ```
+
+See the [shared ignore guide](src/Ignore/CweIgnore.md).
 
 An ignore annotation with no matching raw echo gets a report. See the
 [Blade rule document](src/Rules/Cwe79/Cwe79BladeRule.md) for the exact placement.
 
 
 [More Information](docs/further-reading.md)
+
+Development of this package was made possible thanks to [LiberEat](https://libereat.com/)
