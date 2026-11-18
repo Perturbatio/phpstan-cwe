@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Perturbatio\PhpstanCwe\Blade\AnalysedFileCollector;
+use Perturbatio\PhpstanCwe\Ignore\CweFingerprint;
 use Perturbatio\PhpstanCwe\Ignore\CweIgnoreCollector;
 use Perturbatio\PhpstanCwe\Rules\Cwe306\Cwe306LaravelRule;
 use Perturbatio\PhpstanCwe\Rules\Cwe306\LaravelAuthenticationScanner;
@@ -58,7 +59,7 @@ it('makes ignorable CWE-306 reports and applies the probability minimum', functi
             'severity' => 'high',
             'probability' => 60,
             'url' => 'https://cwe.mitre.org/data/definitions/306.html',
-            'fingerprint' => '729edf66830159388d32aa680f7168ce610de548ecee407dbba24c22f8ded939',
+            'fingerprint' => CweFingerprint::make(306, [$file, "post('/erase') -> closure", 'eraseAccounts']),
         ])
         ->and($reports[0])->not->toBeInstanceOf(PHPStan\Rules\NonIgnorableRuleError::class)
         ->and($reports[0]->getTip())->toContain('Unknown middleware');
