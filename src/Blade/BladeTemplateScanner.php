@@ -80,7 +80,7 @@ final class BladeTemplateScanner
         if (preg_match_all('/\{\{--(.*?)--\}\}/s', $withoutVerbatim, $comments, PREG_OFFSET_CAPTURE) === false) {
             throw new \RuntimeException(sprintf('Cannot scan Blade comments in view: %s', $file));
         }
-        $packageIgnores = [];
+        $packageAnnotations = [];
         foreach ($comments[0] as $index => [$comment, $offset]) {
             if ($offset !== 0 && $source[$offset - 1] === '@') {
                 continue;
@@ -90,7 +90,7 @@ final class BladeTemplateScanner
                 $comments[1][$index][0],
                 $packageMatch,
             ) === 1) {
-                $packageIgnores[$offset + strlen($comment)] = [
+                $packageAnnotations[$offset + strlen($comment)] = [
                     'line' => substr_count($source, "\n", 0, $offset) + 1,
                     'fingerprint' => strtolower($packageMatch[1] ?? ''),
                     'reason' => trim($packageMatch[2] ?? ''),
@@ -117,11 +117,11 @@ final class BladeTemplateScanner
             if (preg_match('/^(?:\'(?:\\\\.|[^\'\\\\])*\'|"(?:\\\\.|[^"\\\\$])*")$/s', $expression) === 1) {
                 continue;
             }
-            foreach ($packageIgnores as $end => $packageIgnore) {
+            foreach ($packageAnnotations as $end => $packageIgnore) {
                 if ($end <= $offset
                     && preg_match('/\A[ \t]*(?:\r?\n[ \t]*)?\z/', substr($source, $end, $offset - $end)) === 1
                 ) {
-                    $packageIgnores[$end]['offset'] = $offset;
+                    $packageAnnotations[$end]['offset'] = $offset;
                 }
             }
             $findings[] = [
@@ -132,7 +132,7 @@ final class BladeTemplateScanner
                 'fingerprint' => CweFingerprint::make(79, [$file, 'blade', $this->normalise($expression)]),
             ];
         }
-        foreach ($packageIgnores as $packageIgnore) {
+        foreach ($packageAnnotations as $packageIgnore) {
             $findings[] = [
                 'file' => $file,
                 'line' => $packageIgnore['line'],

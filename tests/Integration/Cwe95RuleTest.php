@@ -207,8 +207,8 @@ it('reports stale and invalid fingerprint annotations', function (): void {
     expect(array_map(static fn ($error): string => $error->getIdentifier(), $errors))
         ->toBe([
             'phpstanCwe.cwe95',
-            'phpstanCwe.ignoreUnmatched',
-            'phpstanCwe.ignoreFingerprint',
+            'phpstanCwe.unmatchedAnnotation',
+            'phpstanCwe.annotationFingerprint',
             'phpstanCwe.ignoreReason',
         ])
         ->and(array_map(static fn ($error): int => $error->getLine(), $errors))
@@ -394,7 +394,7 @@ it('matches two-word reasons and consumes each annotation once before continuing
 
     $errors = $this->processEvents([$first, $second], [null, $ignore, $staleIgnore]);
     expect(array_map(static fn ($error): string => $error->getIdentifier(), $errors))
-        ->toBe(['phpstanCwe.cwe95', 'phpstanCwe.ignoreUnmatched'])
+        ->toBe(['phpstanCwe.cwe95', 'phpstanCwe.unmatchedAnnotation'])
         ->and(array_map(static fn ($error): int => $error->getLine(), $errors))->toBe([8, 6]);
 });
 
@@ -447,7 +447,7 @@ it('reports stale annotations when a file has no collected eval events', functio
 
     expect($rule->getNodeType())->toBe(CollectedDataNode::class)
         ->and($errors)->toHaveCount(1)
-        ->and($errors[0]->getIdentifier())->toBe('phpstanCwe.ignoreUnmatched')
+        ->and($errors[0]->getIdentifier())->toBe('phpstanCwe.unmatchedAnnotation')
         ->and($errors[0]->getFile())->toBe($file)
         ->and($errors[0]->getLine())->toBe(3)
         ->and($errors[0]->getMessage())->toBe('CWE-95 ignore annotation fingerprint does not match a finding. Review or remove this annotation.');

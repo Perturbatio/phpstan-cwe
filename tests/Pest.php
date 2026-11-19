@@ -6,11 +6,26 @@ pest()->tia()->defaultBranch('main')->always();
 
 require_once __DIR__ . '/Support/AnalysesWithoutFingerprints.php';
 
+/**
+ * Removes the fingerprint from a PHPStan message
+ *
+ * @param  string  $message  The message to process
+ * @return string The message without the fingerprint
+ */
 function withoutFingerprint(string $message): string
 {
     return preg_replace('/ Fingerprint: [a-f0-9]{64}\./', '', $message);
 }
 
+/**
+ * Performs a PHPStan analysis with the given config and fixture, and returns the decoded JSON output
+ *
+ * @param  string  $config  Path to the PHPStan config file, relative to the project root
+ * @param  string  $fixture  Path to the fixture file, relative to the project root
+ * @param  bool  $keepFingerprints  Whether to keep fingerprints in the messages. Defaults to false
+ * @return array The decoded JSON output from PHPStan
+ * @throws JsonException
+ */
 function analyseWithConfig(string $config, string $fixture = 'tests/fixtures/shared/integration.php', bool $keepFingerprints = false): array
 {
     $root = dirname(__DIR__);

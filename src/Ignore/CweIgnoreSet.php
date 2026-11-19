@@ -68,7 +68,7 @@ final class CweIgnoreSet
             if (!$hasValidFingerprint) {
                 $reports[] = $this->report(
                     sprintf('CWE-%d ignore annotation must include a 64-character fingerprint.', $this->cwe),
-                    'phpstanCwe.ignoreFingerprint',
+                    'phpstanCwe.annotationFingerprint',
                     $ignore['line'],
                 );
             }
@@ -82,7 +82,7 @@ final class CweIgnoreSet
             if ($hasValidFingerprint && !in_array($index, $this->matched, true)) {
                 $reports[] = $this->report(
                     sprintf('CWE-%d ignore annotation fingerprint does not match a finding. Review or remove this annotation.', $this->cwe),
-                    'phpstanCwe.ignoreUnmatched',
+                    'phpstanCwe.unmatchedAnnotation',
                     $ignore['line'],
                 );
             }

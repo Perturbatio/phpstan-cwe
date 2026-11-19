@@ -466,8 +466,8 @@ Route::post('/accounts/delete', [AccountController::class, 'destroy']);
 ```
 
 A bad fingerprint, a missing or short reason, or an annotation that matches no
-route produces a `phpstanCwe.ignoreFingerprint`, `phpstanCwe.ignoreReason`,
-or `phpstanCwe.ignoreUnmatched` error. The rule matches an annotation before it
+route produces a `phpstanCwe.annotationFingerprint`, `phpstanCwe.ignoreReason`,
+or `phpstanCwe.unmatchedAnnotation` error. The rule matches an annotation before it
 filters by the minimum score.
 
 The rule does not read native PHPStan ignore annotations. PHPStan's global

@@ -17,19 +17,19 @@ final class CweIgnoreParser implements Parser
 
     public function parseFile(string $file): array
     {
-        return $this->filterNativeIgnores($this->parser->parseFile($file));
+        return $this->filterNativeAnnotations($this->parser->parseFile($file));
     }
 
     public function parseString(string $sourceCode): array
     {
-        return $this->filterNativeIgnores($this->parser->parseString($sourceCode));
+        return $this->filterNativeAnnotations($this->parser->parseString($sourceCode));
     }
 
     /**
      * @param Stmt[] $nodes
      * @return Stmt[]
      */
-    private function filterNativeIgnores(array $nodes): array
+    private function filterNativeAnnotations(array $nodes): array
     {
         if ($nodes === []) {
             return $nodes;
@@ -43,13 +43,13 @@ final class CweIgnoreParser implements Parser
                 continue;
             }
 
-            foreach ($lines as $line => $ignores) {
-                if ($ignores === null) {
+            foreach ($lines as $line => $ignoreAnnotations) {
+                if ($ignoreAnnotations === null) {
                     continue;
                 }
 
                 $remaining = array_values(array_filter(
-                    $ignores,
+                    $ignoreAnnotations,
                     static fn (string|array $ignore): bool => preg_match(
                         '/\AphpstanCwe\.cwe(?:78|79|89|95|306)\.[a-z0-9.]+\z/i',
                         is_string($ignore) ? $ignore : $ignore['name'],

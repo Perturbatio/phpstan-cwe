@@ -174,10 +174,10 @@ it('reports invalid package annotations and keeps the Laravel authentication fin
     $identifiers = array_column($messages, 'identifier');
 
     expect(array_count_values($identifiers))->toEqual([
-        'phpstanCwe.ignoreUnmatched' => 2,
+        'phpstanCwe.unmatchedAnnotation' => 2,
         'phpstanCwe.ignoreReason' => 2,
         'phpstanCwe.cwe306' => 3,
-        'phpstanCwe.ignoreFingerprint' => 1,
+        'phpstanCwe.annotationFingerprint' => 1,
     ]);
 });
 
@@ -265,7 +265,7 @@ it('reports a stale CWE-95 fingerprint annotation', function (): void {
 
     expect($result['totals']['file_errors'])->toBe(1)
     ->and(array_column($messages, 'identifier'))->toBe([
-        'phpstanCwe.ignoreUnmatched',
+        'phpstanCwe.unmatchedAnnotation',
     ])
     ->and(array_column($messages, 'line'))->toBe([5]);
 });
@@ -321,7 +321,7 @@ it('keeps closure annotations valid after comments and blank lines change', func
 
         $ignored = analyseWithConfig($config, $fixture, true);
         $remaining = array_values($ignored['files'])[0]['messages'];
-        expect(array_column($remaining, 'identifier'))->not->toContain('phpstanCwe.ignoreUnmatched');
+        expect(array_column($remaining, 'identifier'))->not->toContain('phpstanCwe.unmatchedAnnotation');
         $remainingFindings = array_values(array_filter(
             $remaining,
             static fn (array $message): bool => $message['identifier'] === 'phpstanCwe.cwe95',
@@ -332,7 +332,7 @@ it('keeps closure annotations valid after comments and blank lines change', func
         file_put_contents($fixture, str_replace("\$request->input('code')", "\$request->input('changed')", $withIgnores));
         $changed = analyseWithConfig($config, $fixture, true);
         expect(array_column(array_values($changed['files'])[0]['messages'], 'identifier'))
-            ->toContain('phpstanCwe.ignoreUnmatched', 'phpstanCwe.cwe95');
+            ->toContain('phpstanCwe.unmatchedAnnotation', 'phpstanCwe.cwe95');
     } finally {
         unlink($fixture);
     }
@@ -491,7 +491,7 @@ it('reports a CWE-78 annotation that does not match a finding or has a short rea
     $messages = array_values($result['files'])[0]['messages'];
     $reports = array_values(array_filter($messages, static fn (array $message): bool => $message['identifier'] !== 'phpstanCwe.cwe78'));
 
-    expect(array_column($reports, 'identifier'))->toBe(['phpstanCwe.ignoreUnmatched', 'phpstanCwe.ignoreReason', 'phpstanCwe.ignoreUnmatched'])
+    expect(array_column($reports, 'identifier'))->toBe(['phpstanCwe.unmatchedAnnotation', 'phpstanCwe.ignoreReason', 'phpstanCwe.unmatchedAnnotation'])
         ->and($reports[1]['message'])->toBe('CWE-78 ignore annotation requires a reason with at least two words.')
         ->and(array_column($reports, 'line'))->toBe([3, 3, 6]);
 });
@@ -614,6 +614,6 @@ it('reports Blade raw echoes and malformed package annotations', function (): vo
     }
 
     expect($linesByIdentifier['phpstanCwe.cwe79'])->toEqualCanonicalizing([2, 3, 4, 5, 8, 11, 14, 18, 20, 23, 24, 24, 26])
-        ->and($linesByIdentifier['phpstanCwe.ignoreFingerprint'])->toEqualCanonicalizing([1, 4, 6, 9, 12, 21, 24])
+        ->and($linesByIdentifier['phpstanCwe.annotationFingerprint'])->toEqualCanonicalizing([1, 4, 6, 9, 12, 21, 24])
         ->and($linesByIdentifier['phpstanCwe.ignoreReason'])->toEqualCanonicalizing([4, 6, 9, 12, 21, 24]);
 });

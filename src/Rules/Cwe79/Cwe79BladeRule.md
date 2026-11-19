@@ -41,7 +41,7 @@ can separate the comment and the echo on that line. If they are on two lines,
 only spaces and one line break can separate them. A blank line or other
 template code stops the annotation. An annotation without a
 matching raw echo gets an error with the identifier
-`phpstanCwe.ignoreUnmatched`. Blade comments do not use PHPStan's built-in PHP
+`phpstanCwe.unmatchedAnnotation`. Blade comments do not use PHPStan's built-in PHP
 comment parser, and this rule does not read `@phpstan-ignore` in Blade.
 
 The rule scans views when PHPStan analyses at least one PHP file. Use

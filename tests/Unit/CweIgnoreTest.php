@@ -163,7 +163,7 @@ it('prefers a valid annotation over an invalid annotation for the same finding',
     $set = new CweIgnoreSet(78, __FILE__, [cweIgnoreEvent(['reason' => 'one']), cweIgnoreEvent()]);
 
     expect($set->suppressesAt($fingerprint, 12))->toBeTrue()
-        ->and(array_map(static fn ($e) => $e->getIdentifier(), $set->reports()))->toBe(['phpstanCwe.ignoreReason', 'phpstanCwe.ignoreUnmatched']);
+        ->and(array_map(static fn ($e) => $e->getIdentifier(), $set->reports()))->toBe(['phpstanCwe.ignoreReason', 'phpstanCwe.unmatchedAnnotation']);
 });
 
 it('does not suppress with an invalid reason or fingerprint but marks the annotation as used', function (): void {
@@ -173,7 +173,7 @@ it('does not suppress with an invalid reason or fingerprint but marks the annota
     expect($short->suppressesAt(str_repeat('a', 64), 12))->toBeFalse()
         ->and($bad->suppressesAt('abc', 12))->toBeFalse()
         ->and(array_map(static fn ($e) => $e->getIdentifier(), $short->reports()))->toBe(['phpstanCwe.ignoreReason'])
-        ->and(array_map(static fn ($e) => $e->getIdentifier(), $bad->reports()))->toBe(['phpstanCwe.ignoreFingerprint']);
+        ->and(array_map(static fn ($e) => $e->getIdentifier(), $bad->reports()))->toBe(['phpstanCwe.annotationFingerprint']);
 });
 
 it('reports malformed, short and unmatched annotations', function (): void {
@@ -189,7 +189,7 @@ it('reports malformed, short and unmatched annotations', function (): void {
         ->and($reports[0]->getFile())->toBe(__FILE__)
         ->and($reports[1]->getMessage())->toBe('CWE-78 ignore annotation requires a reason with at least two words.')
         ->and($reports[1]->getIdentifier())->toBe('phpstanCwe.ignoreReason')
-        ->and($reports[2]->getIdentifier())->toBe('phpstanCwe.ignoreUnmatched')
+        ->and($reports[2]->getIdentifier())->toBe('phpstanCwe.unmatchedAnnotation')
         ->and($reports[2]->getLine())->toBe(9)
         ->and($reports[2]->getMessage())->toBe('CWE-78 ignore annotation fingerprint does not match a finding. Review or remove this annotation.');
 });
@@ -232,5 +232,5 @@ it('consumes the first invalid annotation for a finding and reports the second a
 
     expect($set->suppressesAt($fingerprint, 12))->toBeFalse()
         ->and(array_map(static fn ($e) => [$e->getIdentifier(), $e->getLine()], $set->reports()))
-        ->toBe([['phpstanCwe.ignoreReason', 3], ['phpstanCwe.ignoreReason', 8], ['phpstanCwe.ignoreUnmatched', 8]]);
+        ->toBe([['phpstanCwe.ignoreReason', 3], ['phpstanCwe.ignoreReason', 8], ['phpstanCwe.unmatchedAnnotation', 8]]);
 });

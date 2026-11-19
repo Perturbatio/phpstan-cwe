@@ -37,9 +37,9 @@ An annotation for one CWE does not suppress a finding of another CWE.
 
 | Case | Identifier |
 | --- | --- |
-| The hash is missing or malformed | `phpstanCwe.ignoreFingerprint` |
+| The hash is missing or malformed | `phpstanCwe.annotationFingerprint` |
 | The reason has fewer than two words | `phpstanCwe.ignoreReason` |
-| No finding uses the annotation (a stale annotation) | `phpstanCwe.ignoreUnmatched` |
+| No finding uses the annotation (a stale annotation) | `phpstanCwe.unmatchedAnnotation` |
 
 An annotation with an invalid hash or reason does not suppress the finding.
 Duplicate statements that have the same fingerprint need one annotation for
@@ -73,4 +73,4 @@ change it.
   Native PHPStan annotations, baselines, and `ignoreErrors` can still hide a finding
   without a fingerprint or a reason.
 - In Blade, a comment for `phpstanCwe.cwe79` without a fingerprint reports
-  `phpstanCwe.ignoreFingerprint` and does not hide a finding.
+  `phpstanCwe.annotationFingerprint` and does not hide a finding.

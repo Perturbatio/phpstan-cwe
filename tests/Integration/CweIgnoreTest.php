@@ -63,6 +63,7 @@ function ignoreFixtureCode(array $case, array $statements): string
 
 /**
  * @return array{messages: list<array<string, mixed>>, findings: list<array<string, mixed>>, ignoreErrors: list<string>}
+ * @throws JsonException
  */
 function analyseIgnoreFixture(string $config, string $file, string $code, int $cwe): array
 {
@@ -73,7 +74,14 @@ function analyseIgnoreFixture(string $config, string $file, string $code, int $c
     return [
         'messages' => $messages,
         'findings' => array_values(array_filter($messages, static fn (array $message): bool => $message['identifier'] === 'phpstanCwe.cwe' . $cwe)),
-        'ignoreErrors' => array_column(array_filter($messages, static fn (array $message): bool => str_starts_with($message['identifier'], 'phpstanCwe.ignore')), 'identifier'),
+        'ignoreErrors' => array_column(array_filter(
+            $messages,
+            static fn (array $message): bool => in_array($message['identifier'], [
+                'phpstanCwe.annotationFingerprint',
+                'phpstanCwe.ignoreReason',
+                'phpstanCwe.unmatchedAnnotation',
+            ], true),
+        ), 'identifier'),
     ];
 }
 
@@ -120,7 +128,7 @@ it('invalidates a CWE-95 annotation when the assigned request key changes', func
         expect(analyseIgnoreFixture($config, $file, $ignored, 95)['messages'])->toBe([]);
 
         $changed = analyseIgnoreFixture($config, $file, str_replace('codes-2', 'codes*2', $ignored), 95);
-        expect(array_column($changed['messages'], 'identifier'))->toBe(['phpstanCwe.ignoreUnmatched', 'phpstanCwe.cwe95'])
+        expect(array_column($changed['messages'], 'identifier'))->toBe(['phpstanCwe.unmatchedAnnotation', 'phpstanCwe.cwe95'])
             ->and(array_column($changed['messages'], 'line'))->toBe([8, 9])
             ->and(ignoreFingerprintOf($changed['findings'][0]))->not->toBe($fingerprint);
     });
@@ -162,8 +170,8 @@ it('reports malformed hashes, short reasons and stale package annotations', func
         $fingerprint = ignoreFingerprintOf($baseline['findings'][0]);
 
         $malformed = analyseIgnoreFixture($case['config'], $file, ignoreFixtureCode($case, ["// @phpstan-ignore phpstanCwe.cwe{$cwe}.abc (Reviewed input)", $statement]), $cwe);
-        expect(array_column($malformed['messages'], 'identifier'))->toEqualCanonicalizing(['phpstanCwe.ignoreFingerprint', 'phpstanCwe.cwe' . $cwe])
-            ->and($malformed['ignoreErrors'])->toBe(['phpstanCwe.ignoreFingerprint'])
+        expect(array_column($malformed['messages'], 'identifier'))->toEqualCanonicalizing(['phpstanCwe.annotationFingerprint', 'phpstanCwe.cwe' . $cwe])
+            ->and($malformed['ignoreErrors'])->toBe(['phpstanCwe.annotationFingerprint'])
             ->and($malformed['findings'])->toHaveCount(1);
 
         $short = analyseIgnoreFixture($case['config'], $file, ignoreFixtureCode($case, ["// @phpstan-ignore phpstanCwe.cwe{$cwe}.{$fingerprint} (Reviewed)", $statement]), $cwe);
@@ -175,7 +183,7 @@ it('reports malformed hashes, short reasons and stale package annotations', func
             ->and($missing['findings'])->toHaveCount(1);
 
         $stale = analyseIgnoreFixture($case['config'], $file, ignoreFixtureCode($case, ["// @phpstan-ignore phpstanCwe.cwe{$cwe}." . str_repeat('a', 64) . ' (Reviewed input)', $statement]), $cwe);
-        expect($stale['ignoreErrors'])->toBe(['phpstanCwe.ignoreUnmatched'])
+        expect($stale['ignoreErrors'])->toBe(['phpstanCwe.unmatchedAnnotation'])
             ->and($stale['findings'])->toHaveCount(1);
 
         $otherCwe = $cwe === 78 ? 79 : 78;
@@ -273,19 +281,19 @@ it('applies package annotations to Blade raw echoes', function (): void {
         expect(ignoreFingerprintOf($moved[0]))->toBe($fingerprint);
 
         $malformed = $analyse("{{-- @phpstan-ignore phpstanCwe.cwe79.abc (Reviewed output) --}}\n{$echo}\n");
-        expect($identifiers($malformed))->toContain('phpstanCwe.ignoreFingerprint', 'phpstanCwe.cwe79');
+        expect($identifiers($malformed))->toContain('phpstanCwe.annotationFingerprint', 'phpstanCwe.cwe79');
 
         $short = $analyse("{{-- @phpstan-ignore phpstanCwe.cwe79.{$fingerprint} (Reviewed) --}}\n{$echo}\n");
         expect($identifiers($short))->toContain('phpstanCwe.ignoreReason', 'phpstanCwe.cwe79');
 
         $stale = $analyse('{{-- @phpstan-ignore phpstanCwe.cwe79.' . str_repeat('c', 64) . " (Reviewed output) --}}\n{$echo}\n");
-        expect($identifiers($stale))->toContain('phpstanCwe.ignoreUnmatched', 'phpstanCwe.cwe79');
+        expect($identifiers($stale))->toContain('phpstanCwe.unmatchedAnnotation', 'phpstanCwe.cwe79');
 
         $changed = $analyse('{!! $other !!}');
         expect(ignoreFingerprintOf($changed[0]))->not->toBe($fingerprint);
 
         $legacy = $analyse("{{-- @phpstan-ignore phpstanCwe.cwe79 (Reviewed output) --}}\n{$echo}\n");
-        expect($identifiers($legacy))->toEqualCanonicalizing(['phpstanCwe.ignoreFingerprint','phpstanCwe.cwe79']);
+        expect($identifiers($legacy))->toEqualCanonicalizing(['phpstanCwe.annotationFingerprint','phpstanCwe.cwe79']);
     } finally {
         if (file_exists($view)) {
             unlink($view);

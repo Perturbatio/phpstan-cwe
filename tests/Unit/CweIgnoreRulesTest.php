@@ -61,7 +61,7 @@ it('suppresses a CWE-78 finding with a package annotation and reports an annotat
 
     $errors = (new Cwe78Rule())->processNode($node, $this->createStub(Scope::class));
 
-    expect(ruleIdentifiers($errors))->toBe(['phpstanCwe.cwe78', 'phpstanCwe.ignoreUnmatched'])
+    expect(ruleIdentifiers($errors))->toBe(['phpstanCwe.cwe78', 'phpstanCwe.unmatchedAnnotation'])
         ->and($errors[0]->getFile())->toBe($file)
         ->and($errors[1]->getFile())->toBe($other);
 });
@@ -81,7 +81,7 @@ it('suppresses a CWE-79 finding with a package annotation and reports an annotat
 
     $errors = (new Cwe79Rule())->processNode($node, $this->createStub(Scope::class));
 
-    expect(ruleIdentifiers($errors))->toBe(['phpstanCwe.cwe79', 'phpstanCwe.ignoreUnmatched'])
+    expect(ruleIdentifiers($errors))->toBe(['phpstanCwe.cwe79', 'phpstanCwe.unmatchedAnnotation'])
         ->and($errors[0]->getFile())->toBe($file)
         ->and($errors[1]->getFile())->toBe($other);
 });
@@ -101,7 +101,7 @@ it('skips null direct events and suppresses direct and Laravel CWE-89 findings w
 
     $errors = (new Cwe89Rule())->processNode($node, $this->createStub(Scope::class));
 
-    expect(ruleIdentifiers($errors))->toBe(['phpstanCwe.cwe89', 'phpstanCwe.ignoreUnmatched'])
+    expect(ruleIdentifiers($errors))->toBe(['phpstanCwe.cwe89', 'phpstanCwe.unmatchedAnnotation'])
         ->and($errors[0]->getLine())->toBe(5)
         ->and($errors[1]->getFile())->toBe($other);
 });
@@ -126,7 +126,7 @@ it('suppresses a CWE-306 route finding with a package annotation', function (): 
 
     expect($first)->toHaveCount(1)
         ->and($suppressed)->toBe([])
-        ->and(ruleIdentifiers($stale))->toBe(['phpstanCwe.cwe306', 'phpstanCwe.ignoreUnmatched']);
+        ->and(ruleIdentifiers($stale))->toBe(['phpstanCwe.cwe306', 'phpstanCwe.unmatchedAnnotation']);
 });
 
 it('matches Blade package annotations with the raw echo that follows them', function (): void {
@@ -156,12 +156,12 @@ it('matches Blade package annotations with the raw echo that follows them', func
         expect(ruleIdentifiers($run($valid)))->toBe(['phpstanCwe.cwe79'])
             ->and($run($valid)[0]->getLine())->toBe(3)
             ->and($run($sameLine))->toBe([])
-            ->and(ruleIdentifiers($run($tooFar)))->toBe(['phpstanCwe.cwe79', 'phpstanCwe.ignoreUnmatched'])
-            ->and(ruleIdentifiers($run($notEcho)))->toBe(['phpstanCwe.cwe79', 'phpstanCwe.ignoreUnmatched'])
+            ->and(ruleIdentifiers($run($tooFar)))->toBe(['phpstanCwe.cwe79', 'phpstanCwe.unmatchedAnnotation'])
+            ->and(ruleIdentifiers($run($notEcho)))->toBe(['phpstanCwe.cwe79', 'phpstanCwe.unmatchedAnnotation'])
             ->and(ruleIdentifiers($run($short)))->toBe(['phpstanCwe.cwe79', 'phpstanCwe.ignoreReason'])
-            ->and(ruleIdentifiers($run($bare)))->toBe(['phpstanCwe.cwe79', 'phpstanCwe.ignoreFingerprint', 'phpstanCwe.ignoreReason'])
+            ->and(ruleIdentifiers($run($bare)))->toBe(['phpstanCwe.cwe79', 'phpstanCwe.annotationFingerprint', 'phpstanCwe.ignoreReason'])
             ->and(ruleIdentifiers($run($escaped)))->toBe(['phpstanCwe.cwe79'])
-            ->and(ruleIdentifiers($run($native)))->toBe(['phpstanCwe.cwe79','phpstanCwe.ignoreFingerprint']);
+            ->and(ruleIdentifiers($run($native)))->toBe(['phpstanCwe.cwe79','phpstanCwe.annotationFingerprint']);
 
         $reports = $run($bare);
         $reasonReport = $reports[2];
@@ -170,7 +170,7 @@ it('matches Blade package annotations with the raw echo that follows them', func
             ->and($reports[0]->getTip())->toContain('phpstanCwe.cwe79.');
 
         $mixed = "{{-- @phpstan-ignore phpstanCwe.cwe79 --}} text\n{{-- @phpstan-ignore phpstanCwe.cwe79 --}} text"; // native comment is plain text
-        expect(ruleIdentifiers($run($mixed)))->toBe(['phpstanCwe.ignoreFingerprint', 'phpstanCwe.ignoreReason', 'phpstanCwe.ignoreFingerprint','phpstanCwe.ignoreReason']);
+        expect(ruleIdentifiers($run($mixed)))->toBe(['phpstanCwe.annotationFingerprint', 'phpstanCwe.ignoreReason', 'phpstanCwe.annotationFingerprint','phpstanCwe.ignoreReason']);
     } finally {
         unlink($file);
         rmdir($directory);
@@ -256,7 +256,7 @@ it('sorts CWE-95 sources in the fingerprint and reports annotations after files 
         $second => [CweIgnoreCollector::class => [[ignoreEventFor(95, $second, $expected)]]],
     ], false), $this->createStub(Scope::class));
 
-    expect(ruleIdentifiers($errors))->toBe(['phpstanCwe.ignoreUnmatched'])
+    expect(ruleIdentifiers($errors))->toBe(['phpstanCwe.unmatchedAnnotation'])
         ->and($errors[0]->getFile())->toBe($second);
 });
 

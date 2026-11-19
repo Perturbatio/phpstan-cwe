@@ -107,7 +107,7 @@ PHP),
 
     expect($reports)->toHaveCount(1)
         ->and($reports[0]->getMessage())->toBe('CWE-306 ignore annotation fingerprint does not match a finding. Review or remove this annotation.')
-        ->and($reports[0]->getIdentifier())->toBe('phpstanCwe.ignoreUnmatched')
+        ->and($reports[0]->getIdentifier())->toBe('phpstanCwe.unmatchedAnnotation')
         ->and($reports[0]->getLine())->toBe(3)
         ->and($reports[0]->getFile())->toBe($file);
 });

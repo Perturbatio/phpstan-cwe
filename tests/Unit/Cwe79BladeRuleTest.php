@@ -37,7 +37,7 @@ it('reports raw echoes and diagnoses malformed package annotation comments', fun
         ->and(invade($rule)->minProbability)->toBe(0)
         ->and(array_count_values($identifiers))->toEqual([
             'phpstanCwe.cwe79' => 17,
-            'phpstanCwe.ignoreFingerprint' => 7,
+            'phpstanCwe.annotationFingerprint' => 7,
             'phpstanCwe.ignoreReason' => 6,
         ])
         ->and(preg_replace('/ Fingerprint: [0-9a-f]{64}\./', '', $errors[0]->getMessage()))->toBe('CWE-79: A Blade raw echo prints a value without HTML escape. Severity: high. Probability: 80%. https://cwe.mitre.org/data/definitions/79.html')
@@ -59,7 +59,7 @@ it('reports raw echoes after stale package annotations with the correct report d
             ->and($errors[0]->getIdentifier())->toBe('phpstanCwe.cwe79')
             ->and($errors[0]->getLine())->toBe(3)
             ->and($errors[0]->getFile())->toBe($file)
-            ->and($errors[1]->getIdentifier())->toBe('phpstanCwe.ignoreUnmatched')
+            ->and($errors[1]->getIdentifier())->toBe('phpstanCwe.unmatchedAnnotation')
             ->and($errors[1]->getLine())->toBe(1)
             ->and($errors[1]->getFile())->toBe($file)
             ->and($errors[1]->getMessage())->toBe('CWE-79 ignore annotation fingerprint does not match a finding. Review or remove this annotation.');

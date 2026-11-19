@@ -182,7 +182,7 @@ fingerprint from the report tip and a reason with at least two words:
 Route::post('/accounts/delete', [AccountController::class, 'destroy']);
 ```
 
-A bad fingerprint or a short reason produces a `phpstanCwe.ignoreFingerprint`
+A bad fingerprint or a short reason produces a `phpstanCwe.annotationFingerprint`
 or `phpstanCwe.ignoreReason` error.
 
 > [!WARNING]
