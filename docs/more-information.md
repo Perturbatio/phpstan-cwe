@@ -174,7 +174,7 @@ Run the analysis from your project directory:
 vendor/bin/phpstan analyse --configuration=phpstan.neon
 ```
 
-The identifier is `phpstanCwe.cwe306`. A package ignore must have the
+The identifier is `phpstanCwe.cwe306`. A package ignore annotation must have the
 fingerprint from the report tip and a reason with at least two words:
 
 ```php
@@ -186,7 +186,7 @@ A bad fingerprint or a short reason produces a `phpstanCwe.ignoreFingerprint`
 or `phpstanCwe.ignoreReason` error.
 
 > [!WARNING]
-> The package does not check native `@phpstan-ignore` comments, baselines, or
+> The package does not check native PHPStan ignore annotations, baselines, or
 > global `ignoreErrors`. PHPStan handles them, and they can suppress findings
 > without a reason. Review these settings separately.
 
@@ -243,7 +243,7 @@ The stable identifiers are `phpstanCwe.cwe78`, `phpstanCwe.cwe79`,
 `phpstanCwe.cwe89`, and `phpstanCwe.cwe306`.
 Both CWE-89 rules use `phpstanCwe.cwe89`. Every rule supports
 `@phpstan-ignore` with a fingerprint and a reason of at least two words.
-Read the [shared ignore guide](../src/Ignore/CweIgnore.md). A short reason is
+Read the [shared ignore-annotation guide](../src/Ignore/CweIgnore.md). A short reason is
 reported with `phpstanCwe.ignoreReason`.
 The same data is in the PHPStan error metadata.
 
@@ -343,7 +343,7 @@ vendor/bin/phpstan analyse --configuration=phpstan.neon
 
 For CWE-306, also check that the full `Class::method` name is in
 `phpstanCwe.cwe306CriticalOperations`. A `minProbability` greater than the
-finding's score, an ignore, or a baseline can hide a report.
+finding's score, an ignore annotation, or a baseline can hide a report.
 
 The rule must also support the call syntax. It resolves a call such as
 `$action->execute()` on a typed action parameter or after a direct local

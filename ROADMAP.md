@@ -2,11 +2,11 @@
 
 ## TODOS
 
-* refactor other rules to use a fingerprint for ignore annotations
+* refactor other rules to use fingerprint-based ignore annotations
 
 ## Plan
 
-Add fingerprint ignore annotation functionality to **CWE-78, CWE-79 PHP and Blade, CWE-89 PHP and Laravel, and CWE-306
+Add fingerprint-based ignore-annotation support to **CWE-78, CWE-79 PHP and Blade, CWE-89 PHP and Laravel, and CWE-306
 Laravel**, using CWE-95 as the reference.
 
 ### 1. Define the shared contract
@@ -29,18 +29,18 @@ Use the equivalent Blade comment for templates.
 
 Require a 64-character fingerprint (sha256 hash) and a reason with at least two words. Each annotation must suppress
 **one matching finding in its attached statement or raw echo**. Report invalid fingerprints, missing reasons, and stale
-ignores through the existing diagnostic identifiers.
+ignore annotations through the existing diagnostic identifiers.
 
 Keep severity, probability, detection behaviour, and CWE identifiers unchanged.
 
-### 2. Extract shared fingerprint and ignore support
+### 2. Extract shared fingerprint and annotation support
 
 Extract reusable logic from CWE-95 for:
 
 - Fingerprint generation with the rule identifier as an input.
 - Annotation parsing and reason validation.
-- Statement-bound, single-use matching and unmatched-ignore reporting.
-- Copyable ignore tips, while retaining each rule’s safety advice.
+- Statement-bound, single-use matching and unmatched-annotation reporting.
+- Copyable annotation tips, while retaining each rule’s safety advice.
 
 Keep PHP comment collection and Blade comment scanning separate. Preserve existing CWE-95 fingerprints during
 extraction.
@@ -62,7 +62,7 @@ changes require a new review. Reuse CWE-95’s closure isolation where needed wi
 
 1. Move CWE-95 onto the shared implementation and verify compatibility.
 2. Update CWE-78, CWE-79 PHP, and CWE-89 Laravel collectors.
-3. Add collected finding support for CWE-89 PHP so ignores can be checked after findings are known.
+3. Add collected finding support for CWE-89 PHP so annotations can be checked after findings are known.
 4. Update Blade scanning to retain expressions and validate fingerprint annotations.
 5. Update CWE-306 using route-specific findings, including multiple operations reached from one route.
 
@@ -70,25 +70,25 @@ Register shared services without duplicates when configurations are combined.
 
 ### 5. Preserve compatibility explicitly
 
-Initially retain existing native PHPStan ignores and legacy Blade ignores. Document that **only package fingerprint
+Initially retain existing native PHPStan annotations and legacy Blade annotations. Document that **only package fingerprint
 directives provide fingerprint validation**; native PHPStan suppression cannot offer that guarantee.
 
 Do not silently remove old syntax. Treat mandatory migration as a separate breaking-change decision.
 
 ### 6. Add regression and mutation tests
 
-For every rule, test valid suppression, invalid hashes, short reasons, stale ignores, duplicate findings, statement
+For every rule, test valid suppression, invalid hashes, short reasons, stale annotations, duplicate findings, statement
 boundaries, file isolation, and probability thresholds.
 
 Verify stability across repeated processes, cached runs, comments, and blank lines. Verify relevant source changes
-invalidate ignores. Test individual configurations and the full extension.
+invalidate annotations. Test individual configurations and the full extension.
 
 Require **100% executable-line coverage** and a **100% mutation score**, inspecting timeouts separately. Run mutations
 with `--no-tia --parallel --processes=16`; use targeted runs during migration and a full run after shared changes.
 
 ### 7. Document and validate
 
-Create one shared ignore guide, link from each rule document, and keep the README concise. Document placement,
+Create one shared ignore-annotation guide, link from each rule document, and keep the README concise. Document placement,
 compatibility, fingerprint limitations, and migration examples.
 
 Finish with formatting, static analysis, the full test suite, coverage, mutation testing, and Composer validation.

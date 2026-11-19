@@ -76,7 +76,7 @@ final class Cwe89Rule implements Rule
     }
 
     /**
-     * Direct and Laravel findings share one ignore set, because both use CWE-89 ignores.
+     * Direct and Laravel findings share one annotation set because both rules use CWE-89 annotations.
      *
      * @param list<LaravelSqlEvent|null> $laravelEvents
      * @param list<DirectSqlSink|null> $directEvents
@@ -146,7 +146,7 @@ final class Cwe89Rule implements Rule
         int $line,
         ?string $extraTip,
     ): ?IdentifierRuleError {
-        // Match an ignore before the score filter, so a filtered finding does not make its ignore stale
+        // Match an annotation before the score filter so a filtered finding does not make its annotation stale.
         if ($ignoreSet->suppressesAt($fingerprint, $offset) || !CweReport::isEnabled($this->minProbability, $probability)) {
             return null;
         }

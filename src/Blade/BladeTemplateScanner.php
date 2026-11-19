@@ -11,7 +11,7 @@ use RecursiveIteratorIterator;
 use SplFileInfo;
 
 /**
- * A raw echo has a fingerprint. A package ignore uses the offset of the raw echo that follows it, or -1.
+ * A raw echo has a fingerprint. A package annotation uses the offset of the raw echo that follows it, or -1.
  *
  * @phpstan-type BladeFinding array{file: string, line: int, type: 'rawEcho', offset: int, fingerprint: string}
  *     |array{file: string, line: int, type: 'packageIgnore', ignore: CweIgnoreEvent}

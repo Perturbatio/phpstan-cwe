@@ -29,7 +29,7 @@ it('finds raw Blade values and keeps template line numbers', function (): void {
         ->and($findings)->toContain(['file' => $directory.'/parts/item.blade.php', 'line' => 1, 'type' => 'rawEcho']);
 });
 
-it('finds raw echoes and malformed package ignores in the same Blade view', function (): void {
+it('finds raw echoes and malformed package annotations in the same Blade view', function (): void {
     $file = __DIR__ . '/../fixtures/CWE-79/blade/ignores/ignored.blade.php';
     $findings = (new BladeTemplateScanner())->scan([dirname($file)]);
 
@@ -121,7 +121,7 @@ it('reports PCRE failures when scanning Blade templates', function (string $sour
     'raw echo pattern' => [str_repeat('{!!x', 500) . '!!}', 'Cannot scan raw echoes in Blade view:'],
 ]);
 
-it('handles raw echoes and ignore comments at text boundaries', function (string $source, array $expected): void {
+it('handles raw echoes and annotation comments at text boundaries', function (string $source, array $expected): void {
     $directory = sys_get_temp_dir() . '/phpstan-cwe-' . bin2hex(random_bytes(8));
     mkdir($directory);
     $file = $directory . '/boundary.blade.php';
@@ -139,11 +139,11 @@ it('handles raw echoes and ignore comments at text boundaries', function (string
 })->with([
     'raw echo before trailing at sign' => ['{!! $value !!}@', [['line' => 1, 'type' => 'rawEcho']]],
     'escaped raw echo at start' => ['@{!! $value !!}', []],
-    'ignore before trailing at sign' => ['{{-- @phpstan-ignore phpstanCwe.cwe79 --}}{!! $value !!}@', [['line' => 1, 'type' => 'rawEcho'], ['line' => 1, 'type' => 'packageIgnore']]],
-    'ignore after one character' => ['x{{-- @phpstan-ignore phpstanCwe.cwe79 --}}{!! $value !!}', [['line' => 1, 'type' => 'rawEcho'], ['line' => 1, 'type' => 'packageIgnore']]],
+    'annotation before trailing at sign' => ['{{-- @phpstan-ignore phpstanCwe.cwe79 --}}{!! $value !!}@', [['line' => 1, 'type' => 'rawEcho'], ['line' => 1, 'type' => 'packageIgnore']]],
+    'annotation after one character' => ['x{{-- @phpstan-ignore phpstanCwe.cwe79 --}}{!! $value !!}', [['line' => 1, 'type' => 'rawEcho'], ['line' => 1, 'type' => 'packageIgnore']]],
     'first character newline' => ["\n{!! \$value !!}", [['line' => 2, 'type' => 'rawEcho']]],
-    'ignore after newline' => ["\n{{-- @phpstan-ignore phpstanCwe.cwe79 --}}", [['line' => 2, 'type' => 'packageIgnore']]],
-    'ignore after raw echo' => ['{!! $value !!}{{-- @phpstan-ignore phpstanCwe.cwe79 --}}', [['line' => 1, 'type' => 'rawEcho'], ['line' => 1, 'type' => 'packageIgnore']]],
+    'annotation after newline' => ["\n{{-- @phpstan-ignore phpstanCwe.cwe79 --}}", [['line' => 2, 'type' => 'packageIgnore']]],
+    'annotation after raw echo' => ['{!! $value !!}{{-- @phpstan-ignore phpstanCwe.cwe79 --}}', [['line' => 1, 'type' => 'rawEcho'], ['line' => 1, 'type' => 'packageIgnore']]],
 ]);
 
 it('continues after missing default directories and duplicate views', function (): void {
@@ -216,7 +216,7 @@ function scanBladeViews(array $views): array
     return $result;
 }
 
-it('reports exact package ignore data and attaches it to the echo that follows', function (): void {
+it('reports exact package annotation data and attaches it to the echo that follows', function (): void {
     $hash = str_repeat('A', 64);
     $comment = "{{-- @phpstan-ignore phpstanCwe.cwe79.$hash (  checked value  ) --}}";
     $result = scanBladeViews([
@@ -241,7 +241,7 @@ it('reports exact package ignore data and attaches it to the echo that follows',
         ]);
 });
 
-it('reports a package ignore without an echo with offset minus one and a bare ignore with empty values', function (): void {
+it('reports a package annotation without an echo with offset minus one and a bare annotation with empty values', function (): void {
     $views = scanBladeViews([
         'unmatched.blade.php' => "\n{{-- @phpstan-ignore phpstanCwe.cwe79 --}} text",
     ]);
@@ -255,7 +255,7 @@ it('reports a package ignore without an echo with offset minus one and a bare ig
         ->and($ignore['reason'])->toBe('');
 });
 
-it('scans every comment after an escaped comment and after a package ignore', function (): void {
+it('scans every comment after an escaped comment and after a package annotation', function (): void {
     $hash = str_repeat('a', 64);
     $views = scanBladeViews([
         'mixed.blade.php' => "@{{-- @phpstan-ignore phpstanCwe.cwe79 --}}\n"

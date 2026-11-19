@@ -168,7 +168,7 @@ it('reports a critical DELETE controller action without authentication middlewar
         ]);
 })->with(['tests/fixtures/CWE-306/laravel.neon', 'tests/fixtures/CWE-306/extension.neon']);
 
-it('reports invalid package ignores and keeps the Laravel authentication findings', function (): void {
+it('reports invalid package annotations and keeps the Laravel authentication findings', function (): void {
     $result = analyseWithConfig('tests/fixtures/CWE-306/laravel.neon', 'tests/fixtures/CWE-306/ignore.php');
     $messages = array_values($result['files'])[0]['messages'];
     $identifiers = array_column($messages, 'identifier');
@@ -259,7 +259,7 @@ it('loads Laravel request input from the CWE-95 Laravel configuration', function
     ->and(array_column($messages, 'message')[1])->toContain('Probability: 90%.');
 });
 
-it('reports a stale CWE-95 fingerprint ignore', function (): void {
+it('reports a stale CWE-95 fingerprint annotation', function (): void {
     $result = analyseWithConfig('config/cwe95.neon', 'tests/fixtures/CWE-95/stale-ignore.php', true);
     $messages = array_values($result['files'])[0]['messages'];
 
@@ -290,7 +290,7 @@ it('keeps closure fingerprints and ratings stable across PHPStan runs', function
     }
 })->with(['config/cwe95-laravel.neon', 'tests/fixtures/shared/extension.neon']);
 
-it('keeps closure ignores valid after comments and blank lines change', function (string $config): void {
+it('keeps closure annotations valid after comments and blank lines change', function (string $config): void {
     $fixture = tempnam(sys_get_temp_dir(), 'phpstan-cwe95-');
     if ($fixture === false) {
         throw new RuntimeException('Cannot create a temporary PHP fixture.');
@@ -338,7 +338,7 @@ it('keeps closure ignores valid after comments and blank lines change', function
     }
 })->with(['config/cwe95-laravel.neon', 'tests/fixtures/shared/extension.neon']);
 
-it('reports missing CWE-95 ignore reasons and shows a copyable ignore tip', function (string $config): void {
+it('reports missing CWE-95 annotation reasons and shows a copyable annotation tip', function (string $config): void {
     $result = analyseWithConfig($config, 'tests/fixtures/CWE-95/missing-ignore-reason.php', true);
     $messages = array_values($result['files'])[0]['messages'];
     $reasonErrors = array_values(array_filter($messages, static fn (array $message): bool => $message['identifier'] === 'phpstanCwe.ignoreReason'));
@@ -346,7 +346,7 @@ it('reports missing CWE-95 ignore reasons and shows a copyable ignore tip', func
 
     expect(array_column($messages, 'identifier'))->not->toContain('ignore.parseError')
         ->and($reasonErrors)->toHaveCount(1)
-        ->and($reasonErrors[0]['message'])->toBe('CWE-95 ignore requires a reason with at least two words.')
+        ->and($reasonErrors[0]['message'])->toBe('CWE-95 ignore annotation requires a reason with at least two words.')
         ->and($reasonErrors[0]['line'])->toBe(5)
         ->and($findings)->toHaveCount(1)
         ->and($findings[0]['line'])->toBe(6);
@@ -486,13 +486,13 @@ it('keeps Laravel findings at the minimum score and filters weaker findings', fu
         ->and($messages[0]['message'])->toContain('Probability: 95%.');
 });
 
-it('reports a CWE-78 ignore that does not match a finding or has a short reason', function (): void {
+it('reports a CWE-78 annotation that does not match a finding or has a short reason', function (): void {
     $result = analyseWithConfig('config/cwe78.neon', 'tests/fixtures/CWE-78/ignore.php');
     $messages = array_values($result['files'])[0]['messages'];
     $reports = array_values(array_filter($messages, static fn (array $message): bool => $message['identifier'] !== 'phpstanCwe.cwe78'));
 
     expect(array_column($reports, 'identifier'))->toBe(['phpstanCwe.ignoreUnmatched', 'phpstanCwe.ignoreReason', 'phpstanCwe.ignoreUnmatched'])
-        ->and($reports[1]['message'])->toBe('CWE-78 ignore requires a reason with at least two words.')
+        ->and($reports[1]['message'])->toBe('CWE-78 ignore annotation requires a reason with at least two words.')
         ->and(array_column($reports, 'line'))->toBe([3, 3, 6]);
 });
 
@@ -604,7 +604,7 @@ it('filters Blade reports below the minimum probability', function (): void {
     expect($result['totals']['file_errors'])->toBe(0);
 });
 
-it('reports Blade raw echoes and malformed package ignores', function (): void {
+it('reports Blade raw echoes and malformed package annotations', function (): void {
     $result = analyseWithConfig('tests/fixtures/CWE-79/blade-ignores.neon');
     $messages = array_values($result['files'])[0]['messages'];
 

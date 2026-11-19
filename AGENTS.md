@@ -11,6 +11,16 @@ This project has domain-specific skills available in `**/skills/**`. You MUST ac
 - Use descriptive names for variables and methods. For example, `isRegisteredForDiscounts`, not `discount()`.
 - Check for existing components to reuse before writing a new one.
 
+## Terminology
+
+An ignore annotation is a comment used to tell PHPStan to ignore a specific error on a line.
+* At first mention, use the term "ignore annotation" as the noun. Do not use ignore or ignores as a noun.
+* After you introduce the context as an ignore annotation, you may use annotation on its own when the context makes the meaning clear.
+
+>[!NOTE]
+> Example: "// The ignore annotation ignores the next occurrence. This particular annotation is for the rule CWE-79 only. It does not ignore other rules."
+
+
 ## Tests
 
 - Tests use Pest v5

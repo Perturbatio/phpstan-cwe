@@ -54,7 +54,7 @@ final class Cwe306LaravelRule implements Rule
         }
         foreach ($this->scanner->scan($files, $node->get(ChainedCallCollector::class)) as $finding) {
             $fingerprint = CweFingerprint::make(306, [$finding['file'], $finding['identity'], $finding['operation']]);
-            // Match an ignore before the score filter, so a filtered finding does not make its ignore stale.
+            // Match an annotation before the score filter so a filtered finding does not make its annotation stale.
             if (($ignoreSets[$finding['file']] ?? null)?->suppressesLines($fingerprint, $finding['line'], $finding['endLine']) === true
                 || !CweReport::isEnabled($this->minProbability, $finding['probability'])
             ) {

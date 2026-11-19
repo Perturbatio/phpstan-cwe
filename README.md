@@ -90,7 +90,7 @@ Rule configuration files are grouped as follows:
 Use `config/cwe95.neon` to check PHP evaluation of PHP code including user provided input. Use
 `config/cwe95-laravel.neon` to also check Laravel request input. See the
 [CWE-95 rule document](src/Rules/Cwe95/Cwe95Rule.md) for ratings, limitations,
-and fingerprint-based ignores.
+and fingerprint-based ignore annotations.
 
 If your project does not use Laravel, select the rules you need instead of
 including the full extension.
@@ -98,9 +98,9 @@ including the full extension.
 > [!NOTE]
 > This package *helps* you find common CWE risks in your code. Use its checks as part of a broader security review.
 
-### If you want to include all rules but ignore a specific rule.
+### Suppress reports from one rule while keeping all rules enabled
 
-You cannot exclude a specific rule once loaded, so it will still be processed by PHPStan, but you _can_ ignore the errors it produces.
+You cannot exclude a specific rule once loaded, so PHPStan still processes it. You can suppress the errors it produces.
 
 In this case, add the following to your `phpstan.neon`
 ```neon
@@ -130,7 +130,7 @@ parameters:
 Relative paths start at the current working directory. Set the list to
 `[]` to stop the Blade scan.
 
-To ignore one Blade raw echo, put a Blade comment with the fingerprint from
+To suppress a report for one Blade raw echo, put a Blade comment with the fingerprint from
 the report tip immediately before it:
 
 ```blade
@@ -138,7 +138,7 @@ the report tip immediately before it:
 {!! $trustedHtml !!}
 ```
 
-See the [shared ignore guide](src/Ignore/CweIgnore.md).
+See the [shared ignore-annotation guide](src/Ignore/CweIgnore.md).
 
 An ignore annotation with no matching raw echo gets a report. See the
 [Blade rule document](src/Rules/Cwe79/Cwe79BladeRule.md) for the exact placement.

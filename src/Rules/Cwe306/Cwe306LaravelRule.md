@@ -27,7 +27,7 @@ arrow functions, controller actions, and invokable controllers.
     * [Chained method calls](#chained-method-calls)
   * [Accepted controls](#accepted-controls)
   * [Severity and probability](#severity-and-probability)
-  * [Ignore one finding](#ignore-one-finding)
+  * [Suppress one finding](#suppress-one-finding)
   * [Known limitations](#known-limitations)
 <!-- TOC -->
 
@@ -455,9 +455,9 @@ Reports use `phpstanCwe.cwe306` and give the route file and start line.
 The standard metadata contains the CWE number, severity, probability, and URL.
 An unresolved control does not prove that the route is available to guests.
 
-## Ignore one finding
+## Suppress one finding
 
-Put a package ignore immediately before the route. Copy the fingerprint from
+Put a package ignore annotation immediately before the route. Copy the fingerprint from
 the report tip. The reason must have at least two words:
 
 ```php
@@ -465,13 +465,13 @@ the report tip. The reason must have at least two words:
 Route::post('/accounts/delete', [AccountController::class, 'destroy']);
 ```
 
-A bad fingerprint, a missing or short reason, or an ignore that matches no
+A bad fingerprint, a missing or short reason, or an annotation that matches no
 route produces a `phpstanCwe.ignoreFingerprint`, `phpstanCwe.ignoreReason`,
-or `phpstanCwe.ignoreUnmatched` error. The rule matches an ignore before it
+or `phpstanCwe.ignoreUnmatched` error. The rule matches an annotation before it
 filters by the minimum score.
 
-The rule does not read native `@phpstan-ignore` comments. PHPStan's global
-`ignoreErrors`, baselines, and native ignore annotations are separate suppression
+The rule does not read native PHPStan ignore annotations. PHPStan's global
+`ignoreErrors`, baselines, and native annotations are separate suppression
 mechanisms. They do not have a fingerprint that this rule can check.
 
 ## Known limitations
@@ -511,4 +511,4 @@ mechanisms. They do not have a fingerprint that this rule can check.
 
 Full CWE entry: https://cwe.mitre.org/data/definitions/306.html.
 
-For fingerprint-based ignore annotations, read the [shared ignore guide](../../Ignore/CweIgnore.md).
+For fingerprint-based ignore annotations, read the [shared ignore-annotation guide](../../Ignore/CweIgnore.md).

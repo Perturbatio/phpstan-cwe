@@ -33,6 +33,6 @@ method calls. It does not follow a value after assignment to a variable or
 through a function. It does not prove that a query is safe. A cast to `int`
 or `float` removes SQL syntax from a direct value.
 
-For fingerprint-based ignore annotations, read the [shared ignore guide](../../Ignore/CweIgnore.md).
+For fingerprint-based ignore annotations, read the [shared ignore-annotation guide](../../Ignore/CweIgnore.md).
 
 Full explanation: https://cwe.mitre.org/data/definitions/89.html

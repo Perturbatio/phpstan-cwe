@@ -1,7 +1,7 @@
-# Package ignores with fingerprints
+# Package ignore annotations with fingerprints
 
 All rules in this package (CWE-78, CWE-79 in PHP and Blade, CWE-89, CWE-95, and
-CWE-306) support the `@phpstan-ignore` comment. Use it to suppress one
+CWE-306) support the `@phpstan-ignore` annotation. Use it to suppress one
 finding after you check that the code is safe.
 
 Put a dot between the rule identifier and the fingerprint. The package checks
@@ -21,13 +21,13 @@ shell_exec($command);
   the tip. A fingerprint is lower-case hexadecimal.
 - The reason in parentheses must have at least two words.
 
-An ignore for one CWE does not suppress a finding of another CWE.
+An annotation for one CWE does not suppress a finding of another CWE.
 
 ## Where to put the comment
 
 - PHP rules: put the comment immediately before the statement that has the
-  finding. If the statement is a compound statement, the ignore covers the
-  findings that are inside it, but each ignore suppresses only one finding.
+  finding. If the statement is a compound statement, the annotation covers the
+  findings that are inside it, but each annotation suppresses only one finding.
 - CWE-306: put the comment before the route statement. The route is the
   attached statement.
 - Blade: put the comment `{{-- @phpstan-ignore phpstanCwe.cwe79.<fingerprint> (<reason>) --}}`
@@ -39,12 +39,12 @@ An ignore for one CWE does not suppress a finding of another CWE.
 | --- | --- |
 | The hash is missing or malformed | `phpstanCwe.ignoreFingerprint` |
 | The reason has fewer than two words | `phpstanCwe.ignoreReason` |
-| No finding uses the ignore (a stale ignore) | `phpstanCwe.ignoreUnmatched` |
+| No finding uses the annotation (a stale annotation) | `phpstanCwe.ignoreUnmatched` |
 
-An ignore with an invalid hash or reason does not suppress the finding.
-Duplicate statements that have the same fingerprint need one ignore for each
-finding. A finding that is below the configured minimum probability still uses
-its ignore, so the ignore is not stale.
+An annotation with an invalid hash or reason does not suppress the finding.
+Duplicate statements that have the same fingerprint need one annotation for
+each finding. A finding that is below the configured minimum probability still
+uses its annotation, so the annotation is not stale.
 
 ## What the fingerprint uses
 
@@ -65,12 +65,12 @@ change it.
 ## Limitations
 
 - The hash uses the full file path. A moved or renamed file gets new
-  fingerprints. Review its ignores again.
+  fingerprints. Review its annotations again.
 - A change to the checked expression or to the detected facts creates a new
-  fingerprint. The old ignore is then reported as stale.
+  fingerprint. The old annotation is then reported as stale.
 - A closure is part of the identity only where the rule documents it (CWE-95).
-- In PHP, the package does not check the reason of a native ignore. Native
-  PHPStan ignores, baselines, and `ignoreErrors` can still hide a finding
+- In PHP, the package does not check the reason of a native PHPStan annotation.
+  Native PHPStan annotations, baselines, and `ignoreErrors` can still hide a finding
   without a fingerprint or a reason.
 - In Blade, a comment for `phpstanCwe.cwe79` without a fingerprint reports
   `phpstanCwe.ignoreFingerprint` and does not hide a finding.

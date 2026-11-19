@@ -9,7 +9,7 @@ use PHPStan\Parser\Parser;
 
 covers(CweIgnoreParser::class);
 
-it('skips a statement without native ignores and filters the next trait', function (): void {
+it('skips a statement without native annotations and filters the next trait', function (): void {
     $statement = new Nop();
     $trait = new Trait_('View', [], ['linesToIgnore' => [6 => ['phpstanCwe.cwe79.abc']]]);
     $parser = $this->createStub(Parser::class);
@@ -20,7 +20,7 @@ it('skips a statement without native ignores and filters the next trait', functi
         ->and($trait->getAttribute('linesToIgnore'))->toBe([]);
 });
 
-it('removes package ignore identifiers without changing native ignores', function (): void {
+it('removes package annotation identifiers without changing native annotations', function (): void {
     $packageIgnore = ['name' => 'phpstanCwe.cwe79.abc', 'comment' => 'Reviewed output'];
     $nativeIgnore = ['name' => 'phpstanCwe.cwe79', 'comment' => 'Native ignore'];
     $first = new Nop(['linesToIgnore' => [

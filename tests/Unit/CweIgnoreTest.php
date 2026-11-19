@@ -50,7 +50,7 @@ it('prints an expression without comments and without changing the original', fu
         ->and($expression->getComments())->toHaveCount(1);
 });
 
-it('collects ignores from statement comments with line offsets', function (): void {
+it('collects annotations from statement comments with line offsets', function (): void {
     $node = new Echo_([new Variable('a')], [
         'startLine' => 5,
         'endLine' => 7,
@@ -95,7 +95,7 @@ it('collects nothing from expressions and statements without matching comments',
         ->and($collector->getNodeType())->toBe(PhpParser\Node::class);
 });
 
-it('filters collected ignores by CWE', function (): void {
+it('filters collected annotations by CWE', function (): void {
     $collected = [
         'a.php' => [[cweIgnoreEvent(), cweIgnoreEvent(['cwe' => 79])], null],
         'b.php' => [[cweIgnoreEvent(['cwe' => 79])]],
@@ -124,7 +124,7 @@ it('writes a tip with the fingerprint and the subject', function (): void {
     );
 });
 
-it('suppresses one finding for each ignore by token position', function (): void {
+it('suppresses one finding for each annotation by token position', function (): void {
     $fingerprint = str_repeat('a', 64);
     $set = new CweIgnoreSet(78, __FILE__, [cweIgnoreEvent()]);
 
@@ -148,7 +148,7 @@ it('suppresses by line range', function (): void {
         ->and((new CweIgnoreSet(78, __FILE__, [cweIgnoreEvent()]))->suppressesLines($fingerprint, 5, 5))->toBeTrue();
 });
 
-it('uses two ignores for two findings with the same fingerprint', function (): void {
+it('uses two annotations for two findings with the same fingerprint', function (): void {
     $fingerprint = str_repeat('a', 64);
     $set = new CweIgnoreSet(78, __FILE__, [cweIgnoreEvent(), cweIgnoreEvent(['line' => 8])]);
 
@@ -158,7 +158,7 @@ it('uses two ignores for two findings with the same fingerprint', function (): v
         ->and($set->reports())->toBe([]);
 });
 
-it('prefers a valid ignore over an invalid ignore for the same finding', function (): void {
+it('prefers a valid annotation over an invalid annotation for the same finding', function (): void {
     $fingerprint = str_repeat('a', 64);
     $set = new CweIgnoreSet(78, __FILE__, [cweIgnoreEvent(['reason' => 'one']), cweIgnoreEvent()]);
 
@@ -166,7 +166,7 @@ it('prefers a valid ignore over an invalid ignore for the same finding', functio
         ->and(array_map(static fn ($e) => $e->getIdentifier(), $set->reports()))->toBe(['phpstanCwe.ignoreReason', 'phpstanCwe.ignoreUnmatched']);
 });
 
-it('does not suppress with an invalid reason or fingerprint but marks the ignore as used', function (): void {
+it('does not suppress with an invalid reason or fingerprint but marks the annotation as used', function (): void {
     $short = new CweIgnoreSet(78, __FILE__, [cweIgnoreEvent(['reason' => 'one'])]);
     $bad = new CweIgnoreSet(78, __FILE__, [cweIgnoreEvent(['fingerprint' => 'abc'])]);
 
@@ -176,7 +176,7 @@ it('does not suppress with an invalid reason or fingerprint but marks the ignore
         ->and(array_map(static fn ($e) => $e->getIdentifier(), $bad->reports()))->toBe(['phpstanCwe.ignoreFingerprint']);
 });
 
-it('reports malformed, short and unmatched ignores', function (): void {
+it('reports malformed, short and unmatched annotations', function (): void {
     $set = new CweIgnoreSet(78, __FILE__, [
         cweIgnoreEvent(['fingerprint' => '', 'reason' => '', 'line' => 2]),
         cweIgnoreEvent(['line' => 9]),
@@ -184,14 +184,14 @@ it('reports malformed, short and unmatched ignores', function (): void {
     $reports = $set->reports();
 
     expect($reports)->toHaveCount(3)
-        ->and($reports[0]->getMessage())->toBe('CWE-78 ignore must include a 64-character fingerprint.')
+        ->and($reports[0]->getMessage())->toBe('CWE-78 ignore annotation must include a 64-character fingerprint.')
         ->and($reports[0]->getLine())->toBe(2)
         ->and($reports[0]->getFile())->toBe(__FILE__)
-        ->and($reports[1]->getMessage())->toBe('CWE-78 ignore requires a reason with at least two words.')
+        ->and($reports[1]->getMessage())->toBe('CWE-78 ignore annotation requires a reason with at least two words.')
         ->and($reports[1]->getIdentifier())->toBe('phpstanCwe.ignoreReason')
         ->and($reports[2]->getIdentifier())->toBe('phpstanCwe.ignoreUnmatched')
         ->and($reports[2]->getLine())->toBe(9)
-        ->and($reports[2]->getMessage())->toBe('CWE-78 ignore fingerprint does not match a finding. Review or remove this ignore.');
+        ->and($reports[2]->getMessage())->toBe('CWE-78 ignore annotation fingerprint does not match a finding. Review or remove this annotation.');
 });
 
 it('strips comments from statements inside an expression text', function (): void {
@@ -201,14 +201,14 @@ it('strips comments from statements inside an expression text', function (): voi
     expect(ExpressionText::of($expression))->not->toContain('inner');
 });
 
-it('counts the lines before an ignore that starts after a line break', function (): void {
+it('counts the lines before an annotation that starts after a line break', function (): void {
     $node = new Echo_([new Variable('a')], ['comments' => [new Comment("// note\n// @phpstan-ignore\n phpstanCwe.cwe78.abc (two words)", 4)]]);
     $events = (new CweIgnoreCollector())->processNode($node, $this->createStub(Scope::class));
 
     expect($events[0]['line'])->toBe(5);
 });
 
-it('collects ignore lines and trimmed reasons from the comment text', function (): void {
+it('collects annotation lines and trimmed reasons from the comment text', function (): void {
     $node = new Echo_([new Variable('a')], [
         'startLine' => 5,
         'endLine' => 5,
@@ -223,7 +223,7 @@ it('collects ignore lines and trimmed reasons from the comment text', function (
         ->and($events[0]['reason'])->toBe('two words');
 });
 
-it('consumes the first invalid ignore for a finding and reports the second as unmatched', function (): void {
+it('consumes the first invalid annotation for a finding and reports the second as unmatched', function (): void {
     $fingerprint = str_repeat('a', 64);
     $set = new CweIgnoreSet(78, __FILE__, [
         cweIgnoreEvent(['reason' => 'one', 'line' => 3]),

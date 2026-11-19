@@ -46,7 +46,7 @@ function ruleIdentifiers(array $errors): array
     return array_map(static fn ($error): ?string => $error->getIdentifier(), $errors);
 }
 
-it('suppresses a CWE-78 finding with a package ignore and reports an ignore in a file without events', function (): void {
+it('suppresses a CWE-78 finding with a package annotation and reports an annotation in a file without events', function (): void {
     $file = __DIR__ . '/../fixtures/CWE-78/cwe78.php';
     $other = __DIR__ . '/../fixtures/CWE-78/ignore.php';
     $fingerprint = CweFingerprint::make(78, [$file, 'S', 'shell_exec($c)', '000']);
@@ -66,7 +66,7 @@ it('suppresses a CWE-78 finding with a package ignore and reports an ignore in a
         ->and($errors[1]->getFile())->toBe($other);
 });
 
-it('suppresses a CWE-79 finding with a package ignore and reports an ignore in a file without events', function (): void {
+it('suppresses a CWE-79 finding with a package annotation and reports an annotation in a file without events', function (): void {
     $file = __DIR__ . '/../fixtures/CWE-79/cwe79.php';
     $other = __DIR__ . '/../fixtures/CWE-79/assignments.php';
     $fingerprint = CweFingerprint::make(79, [$file, 'file', '$_GET["a"]']);
@@ -86,7 +86,7 @@ it('suppresses a CWE-79 finding with a package ignore and reports an ignore in a
         ->and($errors[1]->getFile())->toBe($other);
 });
 
-it('skips null direct events and suppresses direct and Laravel CWE-89 findings with their own ignores', function (): void {
+it('skips null direct events and suppresses direct and Laravel CWE-89 findings with their own annotations', function (): void {
     $file = __DIR__ . '/../fixtures/CWE-89/cwe89.php';
     $other = __DIR__ . '/../fixtures/CWE-89/laravel.php';
     $direct = ['file' => $file, 'scope' => 'S', 'offset' => 20, 'line' => 5, 'expression' => 'q: $_GET["a"]'];
@@ -106,7 +106,7 @@ it('skips null direct events and suppresses direct and Laravel CWE-89 findings w
         ->and($errors[1]->getFile())->toBe($other);
 });
 
-it('suppresses a CWE-306 route finding with a package ignore', function (): void {
+it('suppresses a CWE-306 route finding with a package annotation', function (): void {
     $nodes = (new ParserFactory())->createForNewestSupportedVersion()->parse(
         "<?php\nuse Illuminate\Support\Facades\Route;\nRoute::post('/erase', function () { eraseAccounts(); });",
     );
@@ -129,7 +129,7 @@ it('suppresses a CWE-306 route finding with a package ignore', function (): void
         ->and(ruleIdentifiers($stale))->toBe(['phpstanCwe.cwe306', 'phpstanCwe.ignoreUnmatched']);
 });
 
-it('matches Blade package ignores with the raw echo that follows them', function (): void {
+it('matches Blade package annotations with the raw echo that follows them', function (): void {
     $directory = sys_get_temp_dir() . '/phpstan-cwe-' . bin2hex(random_bytes(8));
     mkdir($directory);
     $file = $directory . '/view.blade.php';
@@ -165,8 +165,8 @@ it('matches Blade package ignores with the raw echo that follows them', function
 
         $reports = $run($bare);
         $reasonReport = $reports[2];
-        expect($reports[1]->getMessage())->toBe('CWE-79 ignore must include a 64-character fingerprint.')
-            ->and($reasonReport->getMessage())->toBe('CWE-79 ignore requires a reason with at least two words.')
+        expect($reports[1]->getMessage())->toBe('CWE-79 ignore annotation must include a 64-character fingerprint.')
+            ->and($reasonReport->getMessage())->toBe('CWE-79 ignore annotation requires a reason with at least two words.')
             ->and($reports[0]->getTip())->toContain('phpstanCwe.cwe79.');
 
         $mixed = "{{-- @phpstan-ignore phpstanCwe.cwe79 --}} text\n{{-- @phpstan-ignore phpstanCwe.cwe79 --}} text"; // native comment is plain text
@@ -179,10 +179,10 @@ it('matches Blade package ignores with the raw echo that follows them', function
 
 function staleIgnoreMessage(int $cwe): string
 {
-    return sprintf('CWE-%d ignore fingerprint does not match a finding. Review or remove this ignore.', $cwe);
+    return sprintf('CWE-%d ignore annotation fingerprint does not match a finding. Review or remove this annotation.', $cwe);
 }
 
-it('gives each rule its own CWE number in tips, fingerprints, and ignore reports', function (): void {
+it('gives each rule its own CWE number in tips, fingerprints, and annotation reports', function (): void {
     $scope = $this->createStub(Scope::class);
     $stale = str_repeat('0', 64);
 
@@ -227,7 +227,7 @@ it('gives each rule its own CWE number in tips, fingerprints, and ignore reports
         ->and($errors89[2]->getMessage())->toBe(staleIgnoreMessage(89));
 });
 
-it('gives CWE-306 its own number in the tip, fingerprint, and ignore reports', function (): void {
+it('gives CWE-306 its own number in the tip, fingerprint, and annotation reports', function (): void {
     $nodes = (new ParserFactory())->createForNewestSupportedVersion()->parse(
         "<?php\nuse Illuminate\Support\Facades\Route;\nRoute::post('/erase', function () { eraseAccounts(); });",
     );
@@ -246,7 +246,7 @@ it('gives CWE-306 its own number in the tip, fingerprint, and ignore reports', f
         ->and($errors[1]->getMessage())->toBe(staleIgnoreMessage(306));
 });
 
-it('sorts CWE-95 sources in the fingerprint and reports ignores after files with findings', function (): void {
+it('sorts CWE-95 sources in the fingerprint and reports annotations after files with findings', function (): void {
     $first = __DIR__ . '/../fixtures/CWE-95/cwe95.php';
     $second = __DIR__ . '/../fixtures/CWE-95/stale-ignore.php';
     $event = ['kind' => 'sink', 'file' => $first, 'scope' => 'S', 'offset' => 20, 'startOffset' => 20, 'line' => 4, 'expression' => 'eval($c)', 'sources' => ['b', 'a'], 'unknown' => false, 'variables' => []];
@@ -276,7 +276,7 @@ it('keeps the CWE-306 route identity lower case', function (): void {
         ->toBe(CweFingerprint::make(306, [$file, "post('/erase') -> closure", 'eraseAccounts']));
 });
 
-it('accepts a numeric file key for CWE-89 ignores', function (): void {
+it('accepts a numeric file key for CWE-89 annotations', function (): void {
     $errors = (new Cwe89Rule())->processNode(new CollectedDataNode([
         '123' => [Cwe89Collector::class => [null]],
     ], false), $this->createStub(Scope::class));

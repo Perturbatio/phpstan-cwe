@@ -54,9 +54,9 @@ The rule does not report code that does not call `eval()`:
 $code = $_GET['code']; // No report: This is not a dynamic evaluation sink.
 ```
 
-## Fingerprint-based ignores
+## Fingerprint-based ignore annotations
 
-The [shared ignore guide](../../Ignore/CweIgnore.md) describes the syntax for all rules.
+The [shared ignore-annotation guide](../../Ignore/CweIgnore.md) describes the syntax for all rules.
 
 Each report includes a SHA-256 fingerprint. The fingerprint uses the rule
 identifier, file path, function or method name, closure position in source
@@ -101,8 +101,8 @@ fingerprint. If you add, remove, or move a closure, review its ignore annotation
 > 
 > Use of eval is not advised anyway, try to find an alternative solution.
 
-Each finding has a tip with a copyable ignore comment and its fingerprint.
-Only use the ignore after you check that the evaluated code is safe. Replace
+Each finding has a tip with a copyable ignore annotation and its fingerprint.
+Only use the annotation after you check that the evaluated code is safe. Replace
 `<reason>` with a reason that has at least two words.
 
 This is a package directive, not a PHPStan `@phpstan-ignore` directive.
@@ -115,11 +115,10 @@ report a missing reason.
 eval('return 1 + 1;');
 ```
 
-Put the ignore comment immediately before the statement that calls `eval()`.
-An ignore applies to one finding in that statement, not to other statements
-with the same fingerprint. An ignore applies only when its fingerprint matches
-that finding. The rule
-reports an unmatched or stale fingerprint. It also reports an ignore with an
+Put the ignore annotation immediately before the statement that calls `eval()`.
+An annotation applies to one finding in that statement, not to other statements
+with the same fingerprint. An annotation applies only when its fingerprint matches
+that finding. The rule reports an unmatched or stale fingerprint. It also reports an annotation with an
 invalid fingerprint or a reason with fewer than two words.
 
 ## Configuration

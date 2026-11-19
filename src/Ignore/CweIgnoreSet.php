@@ -8,7 +8,7 @@ use PHPStan\Rules\IdentifierRuleError;
 use PHPStan\Rules\RuleErrorBuilder;
 
 /**
- * Match package ignores with findings in one file. An ignore suppresses
+ * Match package ignore annotations with findings in one file. An annotation suppresses
  * one finding only when its hash and reason are valid.
  *
  * @phpstan-import-type CweIgnoreEvent from CweIgnoreCollector
@@ -36,7 +36,7 @@ final class CweIgnoreSet
         );
     }
 
-    /** Check an ignore by the token position of the finding. */
+    /** Check an annotation by the token position of the finding. */
     public function suppressesAt(string $fingerprint, int $offset): bool
     {
         return $this->consume(
@@ -45,7 +45,7 @@ final class CweIgnoreSet
         );
     }
 
-    /** Check an ignore by the line range of the finding. */
+    /** Check an annotation by the line range of the finding. */
     public function suppressesLines(string $fingerprint, int $startLine, int $endLine): bool
     {
         return $this->consume(
@@ -55,7 +55,7 @@ final class CweIgnoreSet
     }
 
     /**
-     * Report malformed ignores and ignores that match no finding.
+     * Report malformed annotations and ones that match no finding.
      * Call this method after all findings were checked, including filtered findings.
      *
      * @return list<IdentifierRuleError>
@@ -67,21 +67,21 @@ final class CweIgnoreSet
             $hasValidFingerprint = self::isValidFingerprint($ignore['fingerprint']);
             if (!$hasValidFingerprint) {
                 $reports[] = $this->report(
-                    sprintf('CWE-%d ignore must include a 64-character fingerprint.', $this->cwe),
+                    sprintf('CWE-%d ignore annotation must include a 64-character fingerprint.', $this->cwe),
                     'phpstanCwe.ignoreFingerprint',
                     $ignore['line'],
                 );
             }
             if (!self::hasValidReason($ignore['reason'])) {
                 $reports[] = $this->report(
-                    sprintf('CWE-%d ignore requires a reason with at least two words.', $this->cwe),
+                    sprintf('CWE-%d ignore annotation requires a reason with at least two words.', $this->cwe),
                     'phpstanCwe.ignoreReason',
                     $ignore['line'],
                 );
             }
             if ($hasValidFingerprint && !in_array($index, $this->matched, true)) {
                 $reports[] = $this->report(
-                    sprintf('CWE-%d ignore fingerprint does not match a finding. Review or remove this ignore.', $this->cwe),
+                    sprintf('CWE-%d ignore annotation fingerprint does not match a finding. Review or remove this annotation.', $this->cwe),
                     'phpstanCwe.ignoreUnmatched',
                     $ignore['line'],
                 );

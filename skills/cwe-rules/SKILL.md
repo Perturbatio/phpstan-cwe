@@ -1,6 +1,6 @@
 ---
 name: cwe-rules
-description: "Use this skill when you create, change, or review a CWE rule in this package. Trigger when work touches src/Rules, shared input detectors, assignment flow, rule NEON files, rule documents, CWE fixtures, or rule tests. Covers shared input detection, local assignment tracking, file names, report format, configuration, ignore comments, documents, fixtures, and tests."
+description: "Use this skill when you create, change, or review a CWE rule in this package. Trigger when work touches src/Rules, shared input detectors, assignment flow, rule NEON files, rule documents, CWE fixtures, or rule tests. Covers shared input detection, local assignment tracking, file names, report format, configuration, ignore annotations, documents, fixtures, and tests."
 license: MIT
 ---
 
@@ -60,7 +60,7 @@ documents in ASD-STE100 Simplified Technical English.
   `src/Rules/Cwe79/Cwe79Collector.php`, and the flow use in `Cwe79Rule`,
   `Cwe78Rule`, and `Cwe89Rule`.
 
-## Package ignores
+## Package ignore annotations
 
 - Every rule supports `@phpstan-ignore phpstanCwe.cweNN.hash (reason)`.
   Use `CweFingerprint`, `CweIgnoreCollector`, and `CweIgnoreSet` from
@@ -199,7 +199,7 @@ services:
 - Report the path and line in the scanned file, not in a PHP file.
 - Keep line numbers correct when you hide comments or text blocks.
 - Do not report the same real file two times when paths overlap.
-- For an instance ignore, use a comment in the syntax of the template with
+- For an instance annotation, use a comment in the syntax of the template with
   the package form:
 
 ```blade
@@ -211,8 +211,8 @@ services:
   the finding or on the line before it.
 - Report an ignore annotation that has no matching finding with the identifier
   `phpstanCwe.ignoreUnmatched`.
-- If a rule has an instance ignore, give each report a tip that shows the
-  ignore comment. Tell the developer to use it only if they are sure that
+- If a rule has an instance annotation, give each report a tip that shows the
+  annotation. Tell the developer to use it only if they are sure that
   the finding is safe. Give the tip to `CweReport::make()` with the `$tip`
   argument. Do not put the tip in the message.
 
@@ -227,7 +227,7 @@ Put the document next to the rule class. Include:
 5. A short safe example.
 6. The protections that the rule accepts.
 7. The known limitations.
-8. Configuration and ignore instructions, if the rule has special
+8. Configuration and annotation instructions, if the rule has special
    instructions.
 9. The full MITRE link:
    `https://cwe.mitre.org/data/definitions/NN.html`.

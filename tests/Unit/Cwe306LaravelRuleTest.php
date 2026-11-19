@@ -80,7 +80,7 @@ it('uses a zero minimum when no probability is supplied', function (): void {
     expect($minimum->getValue($rule))->toBe(0);
 });
 
-it('reports stale ignores even when all findings are below the minimum', function (): void {
+it('reports stale annotations even when all findings are below the minimum', function (): void {
     $parser = $this->createStub(Parser::class);
     $parser->method('parseFile')->willReturn(
         (new ParserFactory())->createForNewestSupportedVersion()->parse(<<<'PHP'
@@ -106,7 +106,7 @@ PHP),
     $reports = $rule->processNode($data, $this->createStub(Scope::class));
 
     expect($reports)->toHaveCount(1)
-        ->and($reports[0]->getMessage())->toBe('CWE-306 ignore fingerprint does not match a finding. Review or remove this ignore.')
+        ->and($reports[0]->getMessage())->toBe('CWE-306 ignore annotation fingerprint does not match a finding. Review or remove this annotation.')
         ->and($reports[0]->getIdentifier())->toBe('phpstanCwe.ignoreUnmatched')
         ->and($reports[0]->getLine())->toBe(3)
         ->and($reports[0]->getFile())->toBe($file);

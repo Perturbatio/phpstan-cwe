@@ -35,7 +35,7 @@ final class CweIgnoreParser implements Parser
             return $nodes;
         }
 
-        // PHPStan also stores a copy of the native ignores on each trait.
+        // PHPStan also stores a copy of the native ignore annotations on each trait.
         foreach ([$nodes[0], ...(new NodeFinder())->findInstanceOf($nodes, Trait_::class)] as $node) {
             /** @var array<int, list<string|array{name: string, comment: string|null}>|null> $lines */
             $lines = $node->getAttribute('linesToIgnore', []);

@@ -8,7 +8,7 @@ use Perturbatio\PhpstanCwe\Ignore\CweIgnoreSet;
 use Perturbatio\PhpstanCwe\Ignore\ExpressionText;
 use Perturbatio\PhpstanCwe\Rules\Cwe306\Cwe306LaravelRule;
 
-// These tests check the shared package ignore in a separate PHPStan process.
+// These tests check the shared package annotation in a separate PHPStan process.
 covers(CweFingerprint::class, CweIgnoreCollector::class, CweIgnoreSet::class, ExpressionText::class, Cwe306LaravelRule::class);
 
 const IGNORE_ROUTE_PRELUDE = <<<'PHP'
@@ -98,7 +98,7 @@ function withIgnoreFixture(callable $callback): void
     }
 }
 
-it('invalidates a CWE-95 ignore when the assigned request key changes', function (
+it('invalidates a CWE-95 annotation when the assigned request key changes', function (
     string $config,
     string $parameter,
     string $read,
@@ -131,7 +131,7 @@ it('invalidates a CWE-95 ignore when the assigned request key changes', function
     'unrelated receiver' => ['OtherInput $other', '$other->input(\'codes-2\')', 60],
 ]);
 
-it('suppresses exactly one finding with a package ignore', function (string $name): void {
+it('suppresses exactly one finding with a package annotation', function (string $name): void {
     $case = ignoreRuleCases()[$name];
     withIgnoreFixture(function (string $file) use ($case): void {
         $statement = $case['statement'];
@@ -153,7 +153,7 @@ it('suppresses exactly one finding with a package ignore', function (string $nam
     });
 })->with(array_keys(ignoreRuleCases()));
 
-it('reports malformed hashes, short reasons and stale package ignores', function (string $name): void {
+it('reports malformed hashes, short reasons and stale package annotations', function (string $name): void {
     $case = ignoreRuleCases()[$name];
     withIgnoreFixture(function (string $file) use ($case): void {
         $statement = $case['statement'];
@@ -185,7 +185,7 @@ it('reports malformed hashes, short reasons and stale package ignores', function
     });
 })->with(array_keys(ignoreRuleCases()));
 
-it('keeps native unmatched ignores next to a package ignore', function (): void {
+it('keeps native unmatched annotations next to a package annotation', function (): void {
     $case = ignoreRuleCases()['CWE-79'];
     withIgnoreFixture(function (string $file) use ($case): void {
         $statement = $case['statement'];
@@ -217,7 +217,7 @@ it('keeps fingerprints stable across runs and comments and changes them for rele
     });
 })->with(array_keys(ignoreRuleCases()));
 
-it('keeps package ignores working when all rules are loaded together', function (): void {
+it('keeps package annotations working when all rules are loaded together', function (): void {
     withIgnoreFixture(function (string $file): void {
         $code = "<?php\n\neval(\$_GET['code']);\necho \$_GET['name'];\n";
         $baseline = analyseIgnoreFixture('tests/fixtures/shared/extension.neon', $file, $code, 95);
@@ -241,7 +241,7 @@ it('loads the direct and Laravel SQL configurations together without duplicate r
         ->and($both['totals']['file_errors'])->toBe(6);
 });
 
-it('applies package ignores to Blade raw echoes', function (): void {
+it('applies package annotations to Blade raw echoes', function (): void {
     $directory = dirname(__DIR__) . '/fixtures/CWE-79/blade/package-ignores';
     $view = $directory . '/view.blade.php';
     mkdir($directory);

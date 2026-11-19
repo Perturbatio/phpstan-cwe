@@ -15,7 +15,7 @@ It also includes Laravel based input checks via the `request()` helper and input
 <!-- TOC -->
 * [CWE-78: Improper Neutralization of Special Elements used in an OS Command](#cwe-78-improper-neutralization-of-special-elements-used-in-an-os-command)
   * [Rating](#rating)
-  * [Ignore a finding](#ignore-a-finding)
+  * [Suppress a finding](#suppress-a-finding)
   * [Scope for a first version](#scope-for-a-first-version)
   * [Known limitations](#known-limitations)
 <!-- TOC -->
@@ -78,12 +78,12 @@ use it to build an executable name or a whole command. The rule does not
 treat `escapeshellcmd()` as proof that user input is safe. It can stop some
 shell syntax, but it does not stop a value from adding another argument.
 
-## Ignore a finding
+## Suppress a finding
 
-Use the package `@phpstan-ignore` comment with the fingerprint from the
+Use the package `@phpstan-ignore` annotation with the fingerprint from the
 report tip and a reason of at least two words. The rule reports a bad
-fingerprint, a short reason, and an ignore that matches no finding. The rule
-does not read native `@phpstan-ignore` comments. PHPStan handles those.
+fingerprint, a short reason, and an annotation that matches no finding. The rule
+does not read native PHPStan ignore annotations. PHPStan handles those.
 
 ```php
 // @phpstan-ignore phpstanCwe.cwe78.<fingerprint> (The command uses a fixed local file name.)
@@ -120,6 +120,6 @@ The first version does not check these functions:
   program can still treat an argument as an option or otherwise unsafe
   input.
 
-For fingerprint-based ignore annotations, read the [shared ignore guide](../../Ignore/CweIgnore.md).
+For fingerprint-based ignore annotations, read the [shared ignore-annotation guide](../../Ignore/CweIgnore.md).
 
 Full explanation: https://cwe.mitre.org/data/definitions/78.html

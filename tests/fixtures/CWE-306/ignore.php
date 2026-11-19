@@ -19,15 +19,15 @@ namespace {
     // @phpstan-ignore phpstanCwe.cwe306.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa (safe)
     Route::post('/short', function (): void {
         eraseAccounts();
-    }); // Report: The ignore reason has only one word. The ignore does not suppress the route.
+    }); // Report: The annotation reason has only one word. The annotation does not suppress the route.
 
     // @phpstan-ignore phpstanCwe.cwe306.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
     Route::post('/missing', function (): void {
         eraseAccounts();
-    }); // Report: The ignore has no reason. The ignore does not suppress the route.
+    }); // Report: The annotation has no reason. The annotation does not suppress the route.
 
     // @phpstan-ignore phpstanCwe.cwe306.abc (External authentication)
     Route::post('/valid', function (): void {
         eraseAccounts();
-    }); // Report: The ignore has no fingerprint. The ignore does not suppress the route.
+    }); // Report: The annotation has no fingerprint. The annotation does not suppress the route.
 }

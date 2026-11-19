@@ -68,7 +68,7 @@ namespace {
         $process = proc_open([request('command'), 'file'], [], $pipes); // Report: The executable holds request input.
         $output = shell_exec('tool ' . $request->command); // Report: Shell execution uses request input.
         // @phpstan-ignore phpstanCwe.cwe78 (The application checks this command against a fixed allowlist.)
-        exec(request('reviewed-command')); // No report: The inline ignore has a clear reason.
+        exec(request('reviewed-command')); // No report: The inline annotation has a clear reason.
     }
 
     function runNullableRequest(?Request $request): void

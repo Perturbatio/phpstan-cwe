@@ -107,7 +107,7 @@ HTML and shell escape calls do not protect SQL. The database rule accepts
 numeric casts. The Laravel SQL rule keeps its own checks for identifier
 wrapping and bindings.
 
-## Ratings and ignores
+## Ratings and ignore annotations
 
 The shared detector does not assign severity or probability.
 The command rule uses `phpstanCwe.cwe78` and its context-based ratings.
@@ -121,7 +121,7 @@ the finding. It is not a measured probability of an attack.
 
 Set `phpstanCwe.minProbability` to filter these reports. The default is
 `0`. Use the rule's error identifier for an inline PHPStan ignore annotation.
-CWE-78 ignores must give a reason with at least two words.
+CWE-78 ignore annotations must have a reason with at least two words.
 
 ## Known limitations
 

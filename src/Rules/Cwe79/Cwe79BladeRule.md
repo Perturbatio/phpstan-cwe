@@ -25,10 +25,10 @@ It does not follow variables to their source. It can report a safe value
 that is deliberately trusted or already escaped. It cannot check each HTML
 output context. Review each report before you change a template.
 
-Each report has a tip that shows how to ignore it. Ignore a report only if
-you are sure that the value is safe HTML. To ignore one raw echo, put a
-Blade comment immediately before it. Use the fingerprint from the tip and a
-reason of at least two words:
+Each report has a tip that shows how to suppress it. Suppress a report only if
+you are sure that the value is safe HTML. To suppress one raw echo, put an
+ignore annotation in a Blade comment immediately before it. Use the fingerprint
+from the tip and a reason of at least two words:
 
 ```blade
 {{-- @phpstan-ignore phpstanCwe.cwe79.<fingerprint> (This text comes from a trusted source.) --}}
@@ -39,7 +39,7 @@ reason of at least two words:
 The comment can also be on the same line before the raw echo. Only spaces
 can separate the comment and the echo on that line. If they are on two lines,
 only spaces and one line break can separate them. A blank line or other
-template code stops the ignore annotation. An ignore annotation without a
+template code stops the annotation. An annotation without a
 matching raw echo gets an error with the identifier
 `phpstanCwe.ignoreUnmatched`. Blade comments do not use PHPStan's built-in PHP
 comment parser, and this rule does not read `@phpstan-ignore` in Blade.
@@ -57,6 +57,6 @@ parameters:
             - packages/shop/resources/views
 ```
 
-For fingerprint-based ignore annotations, read the [shared ignore guide](../../Ignore/CweIgnore.md).
+For fingerprint-based ignore annotations, read the [shared ignore-annotation guide](../../Ignore/CweIgnore.md).
 
 Full explanation: https://cwe.mitre.org/data/definitions/79.html

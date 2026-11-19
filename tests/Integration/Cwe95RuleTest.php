@@ -165,7 +165,7 @@ it('requires a reason for a matching fingerprint without suppressing the finding
 
     expect(array_map(static fn ($error): string => $error->getIdentifier(), $errors))
         ->toBe(['phpstanCwe.cwe95', 'phpstanCwe.ignoreReason'])
-        ->and($errors[1]->getMessage())->toBe('CWE-95 ignore requires a reason with at least two words.')
+        ->and($errors[1]->getMessage())->toBe('CWE-95 ignore annotation requires a reason with at least two words.')
         ->and($errors[1]->getLine())->toBe(3);
 })->with([
     'block comment without reason' => '/* @phpstan-ignore phpstanCwe.cwe95.%s */',
@@ -188,7 +188,7 @@ it('suppresses only a matching fingerprint with a valid reason', function (): vo
     expect($this->processEvents([$event], [$ignore]))->toBe([]);
 });
 
-it('reports stale and invalid fingerprint ignores', function (): void {
+it('reports stale and invalid fingerprint annotations', function (): void {
     $event = cwe95Event(['kind' => 'sink', 'line' => 4, 'expression' => "eval('return 1;')"]);
     $matchingFingerprint = cwe95Fingerprint(
         $event['file'],
@@ -215,7 +215,7 @@ it('reports stale and invalid fingerprint ignores', function (): void {
         ->toBe([4, 3, 5, 6]);
 });
 
-it('binds each ignore to one finding in its statement', function (int $ignoreStart, int $ignoreEnd, array $expectedLines): void {
+it('binds each annotation to one finding in its statement', function (int $ignoreStart, int $ignoreEnd, array $expectedLines): void {
     $first = cwe95Event();
     $second = cwe95Event(['offset' => 30, 'line' => 6]);
     $fingerprint = cwe95Fingerprint($first['file'], $first['scope'], $first['expression'], []);
@@ -236,7 +236,7 @@ it('binds each ignore to one finding in its statement', function (int $ignoreSta
     expect(array_map(static fn ($error): int => $error->getLine(), $errors))->toBe($expectedLines);
 })->with([
     'second statement only' => [30, 35, [4]],
-    'one finding per ignore' => [20, 35, [6]],
+    'one finding per annotation' => [20, 35, [6]],
     'no finding in target statement' => [40, 45, [4, 6, 5]],
 ]);
 
@@ -379,7 +379,7 @@ it('keeps direct input rating when a sink also has an assigned input', function 
     expect($errors[0]->getMetadata()['probability'])->toBe(95);
 });
 
-it('matches two-word reasons and consumes each ignore once before continuing reports', function (): void {
+it('matches two-word reasons and consumes each annotation once before continuing reports', function (): void {
     $first = cwe95Event();
     $second = cwe95Event(['offset' => 40, 'line' => 8]);
     $fingerprint = cwe95Fingerprint($first['file'], $first['scope'], $first['expression'], []);
@@ -398,7 +398,7 @@ it('matches two-word reasons and consumes each ignore once before continuing rep
         ->and(array_map(static fn ($error): int => $error->getLine(), $errors))->toBe([8, 6]);
 });
 
-it('continues past files whose ignore data has already been processed', function (): void {
+it('continues past files whose annotation data has already been processed', function (): void {
     $firstFile = __DIR__ . '/../fixtures/CWE-95/cwe95.php';
     $secondFile = __DIR__ . '/../fixtures/CWE-95/stale-ignore.php';
     $ignore = [
@@ -426,7 +426,7 @@ it('continues past low probability findings to report later input', function ():
         ->and($errors[0]->getMetadata()['probability'])->toBe(95);
 });
 
-it('reports stale ignores when a file has no collected eval events', function (): void {
+it('reports stale annotations when a file has no collected eval events', function (): void {
     $file = __DIR__ . '/../fixtures/CWE-95/stale-ignore.php';
     $ignore = [
         'cwe' => 95,
@@ -450,7 +450,7 @@ it('reports stale ignores when a file has no collected eval events', function ()
         ->and($errors[0]->getIdentifier())->toBe('phpstanCwe.ignoreUnmatched')
         ->and($errors[0]->getFile())->toBe($file)
         ->and($errors[0]->getLine())->toBe(3)
-        ->and($errors[0]->getMessage())->toBe('CWE-95 ignore fingerprint does not match a finding. Review or remove this ignore.');
+        ->and($errors[0]->getMessage())->toBe('CWE-95 ignore annotation fingerprint does not match a finding. Review or remove this annotation.');
 });
 
 function cwe95Event(array $changes = []): array

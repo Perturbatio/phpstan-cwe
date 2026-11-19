@@ -20,7 +20,7 @@ function bladeRuleNode(bool $hasAnalysedFiles): CollectedDataNode
     return new CollectedDataNode($collectedData, false);
 }
 
-it('reports raw echoes and diagnoses malformed package ignore comments', function (): void {
+it('reports raw echoes and diagnoses malformed package annotation comments', function (): void {
     $directories = [
         __DIR__ . '/../fixtures/CWE-79/blade/ignores',
         __DIR__ . '/../fixtures/CWE-79/blade/views',
@@ -47,7 +47,7 @@ it('reports raw echoes and diagnoses malformed package ignore comments', functio
         );
 });
 
-it('reports raw echoes after stale package ignores with the correct report data', function (): void {
+it('reports raw echoes after stale package annotations with the correct report data', function (): void {
     $directory = sys_get_temp_dir() . '/phpstan-cwe-' . bin2hex(random_bytes(8));
     mkdir($directory);
     $file = $directory . '/view.blade.php';
@@ -62,7 +62,7 @@ it('reports raw echoes after stale package ignores with the correct report data'
             ->and($errors[1]->getIdentifier())->toBe('phpstanCwe.ignoreUnmatched')
             ->and($errors[1]->getLine())->toBe(1)
             ->and($errors[1]->getFile())->toBe($file)
-            ->and($errors[1]->getMessage())->toBe('CWE-79 ignore fingerprint does not match a finding. Review or remove this ignore.');
+            ->and($errors[1]->getMessage())->toBe('CWE-79 ignore annotation fingerprint does not match a finding. Review or remove this annotation.');
     } finally {
         unlink($file);
         rmdir($directory);

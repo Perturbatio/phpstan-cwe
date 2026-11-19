@@ -22,7 +22,7 @@ namespace {
     Route::controller(UserController::class)->as('users.')->prefix('users')->group(function (): void {
         Route::post('/one', 'delete')->name('delete'); // Report: This action requires authentication.
         // @phpstan-ignore phpstanCwe.cwe306 (External gateway authenticates callers)
-        Route::post('/ignored', 'delete'); // No report: This route has an ignore reason.
+        Route::post('/ignored', 'delete'); // No report: This route has a reason in the ignore annotation .
         Route::post('/two', 'delete'); // Report: The previous ignore annotation does not apply to this route.
         Route::post('/protected', 'delete')->middleware('auth:sanctum'); // No report: Authentication is required.
     });
