@@ -11,12 +11,15 @@ use PhpParser\Node\Expr\FuncCall;
 use PhpParser\Node\Expr\Variable;
 use PhpParser\Node\Identifier;
 use PhpParser\Node\Name;
+use PhpParser\Node\Scalar\String_;
 use PhpParser\ParserFactory;
 use PHPStan\Analyser\Scope;
 use PHPStan\Reflection\ReflectionProvider;
 use PHPStan\Type\Constant\ConstantIntegerType;
 use PHPStan\Type\Constant\ConstantStringType;
 use PHPStan\Type\MixedType;
+use PHPStan\Type\NullType;
+use PHPStan\Type\UnionType;
 
 covers(RequestInput::class);
 
@@ -60,6 +63,7 @@ it('accepts only recognised default HTML escape calls', function (
     'namespace shadow' => [new Name('htmlentities'), [new Arg(new Variable('_GET'))], 'App', 'App\\htmlentities', true],
     'unknown function' => [new Name('unknown'), [new Arg(new Variable('_GET'))], null, null, true],
     'dynamic function' => [new Variable('escape'), [new Arg(new Variable('_GET'))], null, 'htmlentities', true],
+    'computed function' => [new Expr\BinaryOp\Concat(new String_('html'), new String_('entities')), [new Arg(new Variable('_GET'))], null, null, true],
     'nondefault flags' => [new Name('htmlentities'), [new Arg(new Variable('_GET')), new Arg(new Variable('flags'))], null, 'htmlentities', true],
 ]);
 
@@ -131,6 +135,11 @@ it('checks only returned input for directly invoked anonymous functions', functi
     'empty return' => ['(function () { return; })()', false],
     'nested closure' => ['(function () { $f = function () { return $_GET["name"]; }; return "fixed"; })()', false],
     'nested function' => ['(function () { function nested() { return $_GET["name"]; } return "fixed"; })()', false],
+    'return after nested function' => ['(function () { function nested() {} return $_GET["name"]; })()', true],
+    'return after an earlier fixed return' => ['(function () { return "fixed"; return $_GET["name"]; })()', true],
+    'unused destructuring with a gap' => ['(function () { [$first, , $third] = $parts; return "fixed"; })()', false],
+    'returns an uncalled arrow' => ['(function () { return fn () => $_GET["name"]; })()', false],
+    'anonymous call with an uncalled arrow argument' => ['(fn ($callback) => "fixed")(fn () => $_GET["name"])', false],
     'nested class' => ['(function () { $x = new class { function value() { return $_GET["name"]; } }; return "fixed"; })()', false],
     'captured outer value' => ['(fn () => $outer)()', true],
     'parameter shadows outer value' => ['(function ($outer) { return $outer; })("fixed")', false],
@@ -155,6 +164,9 @@ it('accepts explicit HTML escape arguments only when their values are known and 
         if ($node instanceof Node\Scalar\String_) {
             return new ConstantStringType($node->value);
         }
+        if ($node instanceof Variable && $node->name === 'optionalEncoding') {
+            return new UnionType([new ConstantStringType('UTF-8'), new NullType()]);
+        }
 
         return new MixedType();
     });
@@ -165,14 +177,19 @@ it('accepts explicit HTML escape arguments only when their values are known and 
 })->with([
     'quotes and UTF-8' => ['htmlspecialchars($_GET["name"], ENT_QUOTES, "UTF-8")', false],
     'named arguments' => ['htmlspecialchars(encoding: "utf-8", string: $_GET["name"], flags: ENT_QUOTES)', false],
+    'positional double encode' => ['htmlspecialchars($_GET["name"], ENT_QUOTES, "UTF-8", false)', false],
+    'named double encode' => ['htmlspecialchars($_GET["name"], double_encode: false)', false],
+    'too many positional arguments' => ['htmlspecialchars($_GET["name"], ENT_QUOTES, "UTF-8", false, false)', true],
     'unsafe flags' => ['htmlspecialchars($_GET["name"], ENT_NOQUOTES)', true],
     'unknown flags' => ['htmlspecialchars($_GET["name"], $flags)', true],
     'unknown encoding' => ['htmlspecialchars($_GET["name"], ENT_QUOTES, $encoding)', true],
     'invalid encoding' => ['htmlspecialchars($_GET["name"], ENT_QUOTES, "invalid")', true],
+    'optional UTF-8 encoding' => ['htmlspecialchars($_GET["name"], ENT_QUOTES, $optionalEncoding)', true],
     'unpacked argument' => ['htmlspecialchars($_GET["name"], ...$flags)', true],
+    'unpacked string argument' => ['htmlspecialchars(...$_GET)', true],
     'unknown named argument' => ['htmlspecialchars(invalid: $_GET["name"])', true],
     'duplicate argument' => ['htmlspecialchars(string: $_GET["name"], string: "fixed")', true],
-    'missing string argument' => ['htmlspecialchars(flags: $_GET["name"])', true],
+    'missing string argument' => ['htmlspecialchars(double_encode: $_GET["name"])', true],
 ]);
 
 it('checks called input callbacks and their arguments', function (string $expression, bool $hasInput): void {
@@ -191,7 +208,42 @@ it('checks called input callbacks and their arguments', function (string $expres
     'called input' => ['$tainted()', true],
     'unknown callback' => ['$other()', false],
     'input argument' => ['$other($_GET["name"])', true],
+    'uncalled arrow argument' => ['$other(fn () => $_GET["name"])', false],
     'first class callable' => ['$tainted(...)', false],
     'captured callback' => ['(fn () => $tainted())()', true],
     'shadowed callback' => ['(fn ($tainted) => $tainted())("fixed")', false],
 ]);
+
+it('visits call arguments once and does not read the callback as a plain value', function (string $expression): void {
+    $nodes = (new ParserFactory())->createForNewestSupportedVersion()->parse('<?php ' . $expression . ';');
+    $visited = [];
+
+    expect(RequestInput::inHtml(
+        $nodes[0]->expr,
+        $this->createStub(Scope::class),
+        $this->createStub(ReflectionProvider::class),
+        static function (string $variable) use (&$visited): bool {
+            $visited[] = $variable;
+
+            return false;
+        },
+    ))->toBeFalse()
+        ->and($visited)->toBe(['argument']);
+})->with([
+    'variable call' => ['$callback($argument)'],
+    'anonymous call' => ['(fn ($value) => "fixed")($argument)'],
+]);
+
+it('does not let parser errors hide valid parameter names in an anonymous call', function (): void {
+    $arrow = new Expr\ArrowFunction([
+        'params' => [new Node\Param(new Expr\Error()), new Node\Param(new Variable('local'))],
+        'expr' => new Variable('local'),
+    ]);
+
+    expect(RequestInput::inHtml(
+        new FuncCall($arrow),
+        $this->createStub(Scope::class),
+        $this->createStub(ReflectionProvider::class),
+        static fn (string $variable): bool => $variable === 'local',
+    ))->toBeFalse();
+});

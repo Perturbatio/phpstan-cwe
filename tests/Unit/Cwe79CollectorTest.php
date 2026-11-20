@@ -122,3 +122,42 @@ it('records closure and arrow function bounds', function (Node $node): void {
     'closure' => [new Expr\Closure([], ['startTokenPos' => 10, 'endTokenPos' => 30])],
     'arrow' => [new Expr\ArrowFunction(['expr' => new Expr\Variable('value')], ['startTokenPos' => 10, 'endTokenPos' => 30])],
 ]);
+
+it('does not record a concatenation as a callback assignment or copy', function (Expr $expression): void {
+    $event = $this->collector->processNode(
+        new Expr\AssignOp\Concat(new Expr\Variable('html'), $expression),
+        $this->scope,
+    );
+
+    expect($event['request'])->toBeFalse()
+        ->and($event)->not->toHaveKey('isArrow')
+        ->and($event)->not->toHaveKey('copiedVariable');
+})->with([
+    'arrow expression' => [new Expr\ArrowFunction(['expr' => new Expr\Variable('_GET')])],
+    'variable expression' => [new Expr\Variable('callback')],
+]);
+
+it('records called dependencies once and in source order', function (Closure $makeNode): void {
+    $first = new Expr\FuncCall(new Expr\Variable('first'));
+    $second = new Expr\FuncCall(new Expr\Variable('second'));
+    $expression = new Expr\BinaryOp\Concat(new Expr\BinaryOp\Concat($first, clone $first), $second);
+
+    $event = $this->collector->processNode($makeNode($expression), $this->scope);
+
+    expect($event['calledVariables'])->toBe(['first', 'second'])
+        ->and($event['variables'])->toBe([]);
+})->with([
+    'assignment' => [static fn (Expr $expr): Expr => new Expr\Assign(new Expr\Variable('html'), $expr)],
+    'output' => [static fn (Expr $expr): Node => new Node\Stmt\Echo_([$expr])],
+]);
+
+it('keeps valid arrow parameters separate from captured variables after a parser error', function (): void {
+    $arrow = new Expr\ArrowFunction([
+        'params' => [new Node\Param(new Expr\Error()), new Node\Param(new Expr\Variable('local'))],
+        'expr' => new Expr\BinaryOp\Concat(new Expr\Variable('local'), new Expr\Variable('captured')),
+    ]);
+
+    $event = $this->collector->processNode(new Expr\Assign(new Expr\Variable('callback'), $arrow), $this->scope);
+
+    expect($event['variables'])->toBe(['captured']);
+});

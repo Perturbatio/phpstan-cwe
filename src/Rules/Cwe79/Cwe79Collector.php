@@ -80,7 +80,10 @@ final class Cwe79Collector implements Collector
             if ($isArrow) {
                 $parameters = [];
                 foreach ($node->expr->params as $parameter) {
-                    if ($parameter->var instanceof Variable && is_string($parameter->var->name)) {
+                    if ($parameter->var instanceof Node\Expr\Error) {
+                        continue;
+                    }
+                    if (is_string($parameter->var->name)) {
                         $parameters[] = $parameter->var->name;
                     }
                 }

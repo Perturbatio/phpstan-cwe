@@ -14,7 +14,6 @@ use PhpParser\Node\Expr\Print_;
 use PhpParser\Node\Expr\Variable;
 use PhpParser\Node\Name;
 use PhpParser\Node\Name\FullyQualified;
-use PhpParser\Node\Stmt\ClassLike;
 use PhpParser\Node\Stmt\Return_;
 use PHPStan\Analyser\Scope;
 use PHPStan\Reflection\ReflectionProvider;
@@ -63,7 +62,7 @@ final class RequestInput
             if ($argument->unpack) {
                 return false;
             }
-            $name = $argument->name?->toString() ?? ($names[$index] ?? '');
+            $name = $argument->name?->toString() ?? $names[$index] ?? null;
             if (!in_array($name, $names, true) || isset($arguments[$name])) {
                 return false;
             }
@@ -80,10 +79,13 @@ final class RequestInput
         }
         if (isset($arguments['encoding'])) {
             $encoding = $scope->getType($arguments['encoding']);
-            $values = $encoding->getConstantStrings();
-            if (!$encoding->isConstantValue()->yes() || count($values) !== 1 || strcasecmp($values[0]->getValue(), 'UTF-8') !== 0) {
+            if (!$encoding->isConstantValue()->yes()) {
                 return false;
             }
+
+            $values = $encoding->getConstantStrings();
+
+            return count($values) === 1 && strcasecmp($values[0]->getValue(), 'UTF-8') === 0;
         }
 
         return true;
@@ -141,7 +143,10 @@ final class RequestInput
 
             $parameters = [];
             foreach ($node->name->params as $parameter) {
-                if ($parameter->var instanceof Variable && is_string($parameter->var->name)) {
+                if ($parameter->var instanceof Node\Expr\Error) {
+                    continue;
+                }
+                if (is_string($parameter->var->name)) {
                     $parameters[] = $parameter->var->name;
                 }
             }
@@ -219,7 +224,7 @@ final class RequestInput
         ?callable $isAdditionalRequestInput,
     ): bool {
         foreach ($nodes as $node) {
-            if ($node instanceof Node\FunctionLike || $node instanceof ClassLike) {
+            if ($node instanceof Node\FunctionLike) {
                 continue;
             }
             if ($node instanceof Return_) {

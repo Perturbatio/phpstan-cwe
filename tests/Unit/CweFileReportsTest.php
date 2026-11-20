@@ -82,6 +82,22 @@ it('matches annotations before filtering findings and reports invalid reasons', 
         ->and($reports[0]->getIdentifier())->toBe('phpstanCwe.ignoreReason');
 });
 
+it('passes numeric file names to the callback as strings', function (): void {
+    $filesVisited = [];
+    CweFileReports::forFiles(
+        89,
+        0,
+        'the SQL text',
+        [],
+        array_fill_keys(['123'], []),
+        static function (string $file) use (&$filesVisited): void {
+            $filesVisited[] = $file;
+        },
+    );
+
+    expect($filesVisited)->toBe(['123']);
+});
+
 it('does not suppress findings outside an annotation and uses the standard tip', function (): void {
     $fingerprint = str_repeat('c', 64);
     $reports = CweFileReports::forFiles(
