@@ -28,8 +28,12 @@ final class RequestInput
      * The scan checks return expressions of directly invoked anonymous functions.
      * It follows captured arrow variables through the optional callback.
      *
-     * @param (callable(string): bool)|null $isAssignedInput
-     * @param (callable(string): bool)|null $isCalledInput
+     * @param  Node  $node
+     * @param  Scope  $scope
+     * @param  ReflectionProvider  $reflectionProvider
+     * @param  (callable(string): bool)|null  $isAssignedInput
+     * @param  (callable(string): bool)|null  $isCalledInput
+     * @return bool
      */
     public static function inHtml(
         Node $node,

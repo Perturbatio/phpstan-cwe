@@ -15,10 +15,12 @@ use PhpParser\Node\Scalar\String_;
 use PhpParser\ParserFactory;
 use PHPStan\Analyser\Scope;
 use PHPStan\Reflection\ReflectionProvider;
+use PHPStan\TrinaryLogic;
 use PHPStan\Type\Constant\ConstantIntegerType;
 use PHPStan\Type\Constant\ConstantStringType;
 use PHPStan\Type\MixedType;
 use PHPStan\Type\NullType;
+use PHPStan\Type\Type;
 use PHPStan\Type\UnionType;
 
 covers(RequestInput::class);
@@ -191,6 +193,23 @@ it('accepts explicit HTML escape arguments only when their values are known and 
     'duplicate argument' => ['htmlspecialchars(string: $_GET["name"], string: "fixed")', true],
     'missing string argument' => ['htmlspecialchars(double_encode: $_GET["name"])', true],
 ]);
+
+it('returns false for a non-constant encoding without checking its string values', function (): void {
+    $encoding = $this->createMock(Type::class);
+    $encoding->method('isConstantValue')->willReturn(TrinaryLogic::createMaybe());
+    $encoding->expects($this->never())->method('getConstantStrings');
+    $scope = $this->createStub(Scope::class);
+    $scope->method('getType')->willReturn($encoding);
+
+    $call = new FuncCall(new Name('htmlspecialchars'), [
+        new Arg(new Variable('input')),
+        new Arg(new Variable('encoding'), name: new Identifier('encoding')),
+    ]);
+
+    $hasSafeHtmlArguments = new ReflectionMethod(RequestInput::class, 'hasSafeHtmlArguments');
+
+    expect($hasSafeHtmlArguments->invoke(null, $call, $scope))->toBeFalse();
+});
 
 it('checks called input callbacks and their arguments', function (string $expression, bool $hasInput): void {
     $nodes = (new ParserFactory())->createForNewestSupportedVersion()->parse('<?php ' . $expression . ';');
