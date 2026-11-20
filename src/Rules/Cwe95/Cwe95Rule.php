@@ -4,21 +4,20 @@ declare(strict_types=1);
 
 namespace Perturbatio\PhpstanCwe\Rules\Cwe95;
 
+use Perturbatio\PhpstanCwe\ClosureScopeIsolation;
+use Perturbatio\PhpstanCwe\CweFileReports;
 use Perturbatio\PhpstanCwe\CweReport;
 use Perturbatio\PhpstanCwe\Ignore\CweFingerprint;
 use Perturbatio\PhpstanCwe\Ignore\CweIgnoreCollector;
-use Perturbatio\PhpstanCwe\Ignore\CweIgnoreSet;
 use Perturbatio\PhpstanCwe\LocalAssignmentFlow;
 use PhpParser\Node;
 use PHPStan\Analyser\Scope;
 use PHPStan\Node\CollectedDataNode;
-use PHPStan\Rules\IdentifierRuleError;
 use PHPStan\Rules\Rule;
 
 /**
  * @phpstan-import-type Cwe95Event from Cwe95Collector
  * @phpstan-import-type Cwe95FlowEvent from Cwe95Collector
- * @phpstan-import-type CweIgnoreEvent from CweIgnoreCollector
  * @phpstan-type Cwe95Facts array{sources: list<string>, unknown: bool, throughAssignment: bool, unknownMethodCalls?: non-empty-list<string>}
  * @implements Rule<CollectedDataNode>
  */
@@ -60,39 +59,32 @@ final class Cwe95Rule implements Rule
 
     public function processNode(Node $node, Scope $scope): array
     {
-        $reports = [];
         /** @var array<string, list<Cwe95Event|null>> $eventsByFile */
         $eventsByFile = $node->get(Cwe95Collector::class);
-        $ignoresByFile = CweIgnoreCollector::fromNode($node, 95);
-
-        foreach ($eventsByFile as $file => $events) {
-            $reports = array_merge(
-                $reports,
-                $this->reportsForFile($file, $events, $ignoresByFile[$file] ?? []),
-            );
-        }
-
-        foreach ($ignoresByFile as $file => $ignores) {
-            if (array_key_exists($file, $eventsByFile)) {
-                continue;
-            }
-            $reports = array_merge($reports, $this->reportsForFile($file, [], $ignores));
-        }
-
-        return $reports;
+        return CweFileReports::forFiles(
+            95,
+            $this->minProbability,
+            'the evaluated code',
+            array_keys($eventsByFile),
+            CweIgnoreCollector::fromNode($node, 95),
+            fn (string $file, CweFileReports $reports) => $this->reportsForFile($file, $eventsByFile[$file] ?? [], $reports),
+        );
     }
 
     /**
+     * Make CWE-95 reports for the events in one file.
+     *
      * @param list<Cwe95Event|null> $events
-     * @param list<CweIgnoreEvent> $ignores
-     * @return list<IdentifierRuleError>
      */
-    private function reportsForFile(string $file, array $events, array $ignores): array
+    private function reportsForFile(string $file, array $events, CweFileReports $reports): void
     {
-        $reports = [];
-        $ignoreSet = new CweIgnoreSet(95, $file, $ignores);
+        $flowEvents = [];
+        foreach (ClosureScopeIsolation::isolate($events) as [$event, $scope]) {
+            $event['scope'] = $scope;
+            $flowEvents[] = $event;
+        }
 
-        foreach (LocalAssignmentFlow::sinks($this->isolateClosureScopes($events), $this->resolveFacts(...)) as [$event, $facts]) {
+        foreach (LocalAssignmentFlow::sinks($flowEvents, $this->resolveFacts(...)) as [$event, $facts]) {
             $sources = $facts['sources'];
             sort($sources);
             $unknownMethodCalls = $facts['unknownMethodCalls'] ?? [];
@@ -104,67 +96,16 @@ final class Cwe95Rule implements Rule
                 implode('|', $sources),
                 ...$unknownMethodCalls,
             ]);
-            if ($ignoreSet->suppressesAt($fingerprint, $event['offset'])) {
-                continue;
-            }
             [$severity, $probability, $reason] = $this->rating($facts, $event['sources'] !== []);
-            if (!CweReport::isEnabled($this->minProbability, $probability)) {
-                continue;
-            }
-
-            $reports[] = CweReport::make(
-                95,
+            $reports->add(
+                $fingerprint,
+                $event['offset'],
+                $event['line'],
                 $reason,
                 $severity,
                 $probability,
-                $file,
-                $event['line'],
-                tip: CweIgnoreSet::tip(95, $fingerprint, 'the evaluated code'),
-                fingerprint: $fingerprint,
             );
         }
-
-        return array_merge($reports, $ignoreSet->reports());
-    }
-
-    /**
-     * @param list<Cwe95Event|null> $events
-     * @return list<Cwe95FlowEvent>
-     */
-    private function isolateClosureScopes(array $events): array
-    {
-        $closures = [];
-        $flowEvents = [];
-        foreach ($events as $event) {
-            if ($event === null) {
-                continue;
-            }
-            if ($event['kind'] === 'scope') {
-                $closures[$event['offset']] = $event;
-            } else {
-                $flowEvents[] = $event;
-            }
-        }
-        ksort($closures);
-
-        foreach ($flowEvents as $index => $event) {
-            $closureNumber = 0;
-            $closureScope = $event['scope'];
-            $scopeOffset = $event['kind'] === 'assignment' ? $event['startOffset'] : $event['offset'];
-            foreach ($closures as $closure) {
-                $closureNumber++;
-                if ($closure['scope'] === $event['scope']
-                    && $closure['offset'] < $scopeOffset
-                    && $scopeOffset < $closure['endOffset']
-                ) {
-                    // Use source order, not token positions, in the fingerprint.
-                    $closureScope = $event['scope'] . '::closure' . $closureNumber;
-                }
-            }
-            $flowEvents[$index]['scope'] = $closureScope;
-        }
-
-        return $flowEvents;
     }
 
     /**

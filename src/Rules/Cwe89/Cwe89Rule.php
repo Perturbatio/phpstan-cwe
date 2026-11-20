@@ -4,21 +4,19 @@ declare(strict_types=1);
 
 namespace Perturbatio\PhpstanCwe\Rules\Cwe89;
 
+use Perturbatio\PhpstanCwe\CweFileReports;
 use Perturbatio\PhpstanCwe\CweReport;
 use Perturbatio\PhpstanCwe\Ignore\CweFingerprint;
 use Perturbatio\PhpstanCwe\Ignore\CweIgnoreCollector;
-use Perturbatio\PhpstanCwe\Ignore\CweIgnoreSet;
 use Perturbatio\PhpstanCwe\LocalAssignmentFlow;
 use PhpParser\Node;
 use PHPStan\Analyser\Scope;
 use PHPStan\Node\CollectedDataNode;
-use PHPStan\Rules\IdentifierRuleError;
 use PHPStan\Rules\Rule;
 
 /**
  * @phpstan-import-type LaravelSqlEvent from Cwe89LaravelCollector
  * @phpstan-import-type DirectSqlSink from Cwe89Collector
- * @phpstan-import-type CweIgnoreEvent from CweIgnoreCollector
  * @implements Rule<CollectedDataNode>
  */
 final class Cwe89Rule implements Rule
@@ -59,20 +57,19 @@ final class Cwe89Rule implements Rule
         $laravelByFile = $node->get(Cwe89LaravelCollector::class);
         /** @var array<string, list<DirectSqlSink|null>> $directByFile */
         $directByFile = $node->get(Cwe89Collector::class);
-        $ignoresByFile = CweIgnoreCollector::fromNode($node, 89);
-
-        $reports = [];
-        $files = array_unique([...array_keys($laravelByFile), ...array_keys($directByFile), ...array_keys($ignoresByFile)]);
-        foreach ($files as $file) {
-            $reports = array_merge($reports, $this->reportsForFile(
-                (string) $file,
+        return CweFileReports::forFiles(
+            89,
+            $this->minProbability,
+            'the SQL text',
+            [...array_keys($laravelByFile), ...array_keys($directByFile)],
+            CweIgnoreCollector::fromNode($node, 89),
+            fn (string $file, CweFileReports $reports) => $this->reportsForFile(
+                $file,
                 $laravelByFile[$file] ?? [],
                 $directByFile[$file] ?? [],
-                $ignoresByFile[$file] ?? [],
-            ));
-        }
-
-        return $reports;
+                $reports,
+            ),
+        );
     }
 
     /**
@@ -80,32 +77,23 @@ final class Cwe89Rule implements Rule
      *
      * @param list<LaravelSqlEvent|null> $laravelEvents
      * @param list<DirectSqlSink|null> $directEvents
-     * @param list<CweIgnoreEvent> $ignores
-     * @return list<IdentifierRuleError>
      */
-    private function reportsForFile(string $file, array $laravelEvents, array $directEvents, array $ignores): array
+    private function reportsForFile(string $file, array $laravelEvents, array $directEvents, CweFileReports $reports): void
     {
-        $reports = [];
-        $ignoreSet = new CweIgnoreSet(89, $file, $ignores);
         foreach ($directEvents as $event) {
             if ($event === null) {
                 continue;
             }
 
             $fingerprint = CweFingerprint::make(89, [$file, $event['scope'], 'direct', $event['expression']]);
-            $report = $this->report(
-                $ignoreSet,
+            $reports->add(
                 $fingerprint,
                 $event['offset'],
-                'Request input is used in a SQL query. Use a bound parameter.',
-                self::getRequestProbability(),
-                $file,
                 $event['line'],
-                null,
+                'Request input is used in a SQL query. Use a bound parameter.',
+                self::SEVERITY,
+                self::getRequestProbability(),
             );
-            if ($report !== null) {
-                $reports[] = $report;
-            }
         }
 
         foreach (LocalAssignmentFlow::sinks($laravelEvents, $this->resolveStatus(...)) as [$event, $status]) {
@@ -116,53 +104,18 @@ final class Cwe89Rule implements Rule
             $isKnownRequest = $status === self::STATUS_REQUEST;
             $fingerprint = CweFingerprint::make(89, [$file, $event['scope'], 'laravel', $event['expression'], sprintf('%d', $status)]);
             // Unknown dynamic values get a lower score than known request data
-            $report = $this->report(
-                $ignoreSet,
+            $reports->add(
                 $fingerprint,
                 $event['offset'],
+                $event['line'],
                 $isKnownRequest
                     ? 'Request input is used in Laravel raw SQL. Use a bound parameter.'
                     : 'Warning: The source of a dynamic value in Laravel raw SQL is unknown. Use a bound parameter.',
+                self::SEVERITY,
                 $isKnownRequest ? self::getRequestProbability() : self::getUnknownProbability(),
-                $file,
-                $event['line'],
                 self::WRAP_TIP,
             );
-            if ($report !== null) {
-                $reports[] = $report;
-            }
         }
-
-        return array_merge($reports, $ignoreSet->reports());
-    }
-
-    private function report(
-        CweIgnoreSet $ignoreSet,
-        string $fingerprint,
-        int $offset,
-        string $reason,
-        int $probability,
-        string $file,
-        int $line,
-        ?string $extraTip,
-    ): ?IdentifierRuleError {
-        // Match an annotation before the score filter so a filtered finding does not make its annotation stale.
-        if ($ignoreSet->suppressesAt($fingerprint, $offset) || !CweReport::isEnabled($this->minProbability, $probability)) {
-            return null;
-        }
-
-        $ignoreTip = CweIgnoreSet::tip(89, $fingerprint, 'the SQL text');
-
-        return CweReport::make(
-            89,
-            $reason,
-            self::SEVERITY,
-            $probability,
-            $file,
-            $line,
-            tip: $extraTip === null ? $ignoreTip : $extraTip . "\n" . $ignoreTip,
-            fingerprint: $fingerprint,
-        );
     }
 
     /**

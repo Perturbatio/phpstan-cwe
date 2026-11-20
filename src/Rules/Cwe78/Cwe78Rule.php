@@ -4,20 +4,18 @@ declare(strict_types=1);
 
 namespace Perturbatio\PhpstanCwe\Rules\Cwe78;
 
+use Perturbatio\PhpstanCwe\CweFileReports;
 use Perturbatio\PhpstanCwe\CweReport;
 use Perturbatio\PhpstanCwe\Ignore\CweFingerprint;
 use Perturbatio\PhpstanCwe\Ignore\CweIgnoreCollector;
-use Perturbatio\PhpstanCwe\Ignore\CweIgnoreSet;
 use Perturbatio\PhpstanCwe\LocalAssignmentFlow;
 use PhpParser\Node;
 use PHPStan\Analyser\Scope;
 use PHPStan\Node\CollectedDataNode;
-use PHPStan\Rules\IdentifierRuleError;
 use PHPStan\Rules\Rule;
 
 /**
  * @phpstan-import-type Cwe78Event from Cwe78Collector
- * @phpstan-import-type CweIgnoreEvent from CweIgnoreCollector
  * @implements Rule<CollectedDataNode>
  */
 final class Cwe78Rule implements Rule
@@ -55,30 +53,23 @@ final class Cwe78Rule implements Rule
 
     public function processNode(Node $node, Scope $scope): array
     {
-        $reports = [];
-        // The collector groups events by file. Check each file in source order
         /** @var array<string, list<Cwe78Event|null>> $eventsByFile */
         $eventsByFile = $node->get(Cwe78Collector::class);
-        $packageIgnoresByFile = CweIgnoreCollector::fromNode($node, 78);
-        foreach ($eventsByFile as $file => $events) {
-            $reports = array_merge($reports, $this->reportsForFile($file, $events, $packageIgnoresByFile[$file] ?? []));
-        }
-        foreach (array_diff_key($packageIgnoresByFile, $eventsByFile) as $file => $ignores) {
-            $reports = array_merge($reports, $this->reportsForFile($file, [], $ignores));
-        }
-
-        return $reports;
+        return CweFileReports::forFiles(
+            78,
+            $this->minProbability,
+            'the command and its arguments',
+            array_keys($eventsByFile),
+            CweIgnoreCollector::fromNode($node, 78),
+            fn (string $file, CweFileReports $reports) => $this->reportsForFile($file, $eventsByFile[$file] ?? [], $reports),
+        );
     }
 
     /**
      * @param list<Cwe78Event|null> $events
-     * @param list<CweIgnoreEvent> $ignores
-     * @return list<IdentifierRuleError>
      */
-    private function reportsForFile(string $file, array $events, array $ignores): array
+    private function reportsForFile(string $file, array $events, CweFileReports $reports): void
     {
-        $reports = [];
-        $ignoreSet = new CweIgnoreSet(78, $file, $ignores);
         foreach (LocalAssignmentFlow::sinks($events, $this->resolveFacts(...)) as [$event, $facts]) {
             $fingerprint = CweFingerprint::make(78, [
                 $file,
@@ -86,29 +77,17 @@ final class Cwe78Rule implements Rule
                 $event['expression'],
                 sprintf('%d%d%d', $facts['request'], $facts['hasStaticText'], $facts['throughAssignment']),
             ]);
-            if ($ignoreSet->suppressesAt($fingerprint, $event['offset'])) {
-                continue;
-            }
-
             // A command may be unsafe even when no request source is known
             [$severity, $probability, $reason] = $this->rating($facts);
-            if (!CweReport::isEnabled($this->minProbability, $probability)) {
-                continue;
-            }
-
-            $reports[] = CweReport::make(
-                78,
+            $reports->add(
+                $fingerprint,
+                $event['offset'],
+                $event['line'],
                 $reason,
                 $severity,
                 $probability,
-                $file,
-                $event['line'],
-                tip: CweIgnoreSet::tip(78, $fingerprint, 'the command and its arguments'),
-                fingerprint: $fingerprint,
             );
         }
-
-        return array_merge($reports, $ignoreSet->reports());
     }
 
     /**

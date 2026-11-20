@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Perturbatio\PhpstanCwe\Rules\Cwe95\Cwe95Collector;
+use Perturbatio\PhpstanCwe\ClosureScopeIsolation;
 use Perturbatio\PhpstanCwe\Ignore\CweFingerprint;
 use Perturbatio\PhpstanCwe\Ignore\CweIgnoreCollector;
 use Perturbatio\PhpstanCwe\Rules\Cwe95\Cwe95Rule;
@@ -277,9 +278,9 @@ it('gives lexical closures exact source-order identities and excludes their boun
         cwe95Event(['offset' => 25]),
         cwe95Event(['offset' => 40]),
     ];
-    $flow = invade(new Cwe95Rule())->isolateClosureScopes($events);
+    $flow = ClosureScopeIsolation::isolate($events);
 
-    expect(array_column($flow, 'scope'))->toBe([
+    expect(array_column($flow, 1))->toBe([
         'Example::evaluate',
         'Example::evaluate::closure1',
         'Example::evaluate::closure2',
