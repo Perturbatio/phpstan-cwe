@@ -98,5 +98,7 @@ namespace {
     }
 
     echo (fn () => request('name'))(); // Report: The arrow returns Laravel input.
-    echo (function () { return htmlspecialchars(request('name')); })(); // No report: The return value is escaped.
+    echo (function () {
+        return htmlspecialchars(request('name'));
+    })(); // No report: The return value is escaped.
 }

@@ -1,4 +1,5 @@
 <?php
+
 //
 //namespace Perturbatio\PhpstanCwe\Rules\Cwe98;
 //

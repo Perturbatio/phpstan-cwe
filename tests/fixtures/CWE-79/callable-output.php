@@ -1,6 +1,8 @@
 <?php
 
-echo (function (): string { return $_GET['name'] ?? ''; })(); // Report: The closure returns request input.
+echo (function (): string {
+    return $_GET['name'] ?? '';
+})(); // Report: The closure returns request input.
 $getName = fn (): string => $_GET['name'] ?? '';
 echo $getName(); // Report: The arrow returns request input.
 $name = $_GET['name'] ?? '';

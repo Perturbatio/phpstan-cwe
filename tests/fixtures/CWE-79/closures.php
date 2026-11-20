@@ -27,7 +27,7 @@ $sibling = function (string $local): void {
     echo $local; // No report: The value is fixed.
 };
 $arrow = fn () => print $_GET['name']; // Report: Direct input in an arrow function.
-$arrowLocal = fn () => print ($arrowValue = $_GET['name']); // Report: Direct input in an arrow function.
+$arrowLocal = fn () => print($arrowValue = $_GET['name']); // Report: Direct input in an arrow function.
 echo $arrowValue; // No report: An arrow assignment does not reach the outer scope.
 echo $arrow; // No report: The arrow body is not the assigned value.
 echo (fn () => $_GET['name'])(); // Report: The arrow returns request input.

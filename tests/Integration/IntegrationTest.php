@@ -407,7 +407,7 @@ it('reports directly invoked anonymous return values through both package config
     $result = analyseWithConfig($config, 'tests/fixtures/CWE-79/immediate-calls.php');
     $file = dirname(__DIR__, 2) . '/tests/fixtures/CWE-79/immediate-calls.php';
     $messages = $result['files'][$file]['messages'];
-    $lines = [4, 5, 7, 15, 17, 18, 19];
+    $lines = [4, 5, 9, 29, 33, 34, 39];
 
     expect(array_column($messages, 'line'))->toBe($lines)
         ->and(array_column($messages, 'identifier'))->toBe(array_fill(0, count($lines), 'phpstanCwe.cwe79'))
@@ -425,7 +425,21 @@ it('tracks arrow callbacks and explicit HTML escaping with both package configur
     $result = analyseWithConfig($config, 'tests/fixtures/CWE-79/callable-output.php');
     $file = dirname(__DIR__, 2) . '/tests/fixtures/CWE-79/callable-output.php';
     $messages = $result['files'][$file]['messages'];
-    $lines = [3, 5, 7, 15, 22, 24, 25, 28, 31, 39, 42, 43];
+    $lines = [3, 7, 9, 17, 24, 26, 27, 30, 33, 41, 44, 45];
+
+    expect(array_column($messages, 'line'))->toBe($lines)
+        ->and(array_column($messages, 'identifier'))->toBe(array_fill(0, count($lines), 'phpstanCwe.cwe79'))
+        ->and(array_column($messages, 'ignorable'))->toBe(array_fill(0, count($lines), true));
+    foreach ($messages as $message) {
+        expect($message['message'])->toContain('Severity: high.', 'Probability: 80%.', 'https://cwe.mitre.org/data/definitions/79.html');
+    }
+})->with(['config/cwe79.neon', 'tests/fixtures/shared/extension.neon']);
+
+it('checks HTML and unsupported output contexts with both package configurations', function (string $config): void {
+    $result = analyseWithConfig($config, 'tests/fixtures/CWE-79/output-contexts.php');
+    $file = dirname(__DIR__, 2) . '/tests/fixtures/CWE-79/output-contexts.php';
+    $messages = $result['files'][$file]['messages'];
+    $lines = [3, 6, 10, 15, 16];
 
     expect(array_column($messages, 'line'))->toBe($lines)
         ->and(array_column($messages, 'identifier'))->toBe(array_fill(0, count($lines), 'phpstanCwe.cwe79'))

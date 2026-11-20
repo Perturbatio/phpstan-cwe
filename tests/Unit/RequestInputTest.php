@@ -121,6 +121,8 @@ it('checks only returned input for directly invoked anonymous functions', functi
     'arrow returns input' => ['(fn () => $_GET["name"])()', true],
     'closure returns input' => ['(function () { return $_POST["name"]; })()', true],
     'branch returns input' => ['(function () { if (true) { return $_GET["name"]; } return "fixed"; })()', true],
+    'else branch returns input' => ['(function () { if (true) {} else { return $_GET["name"]; } })()', true],
+    'else branch returns fixed value' => ['(function () { if (true) {} else { return "fixed"; } })()', false],
     'nested call' => ['(fn () => (fn () => $_GET["name"])())()', true],
     'escaped arrow' => ['(fn () => htmlspecialchars($_GET["name"]))()', false],
     'escaped closure' => ['(function () { return htmlentities($_GET["name"]); })()', false],
@@ -168,4 +170,28 @@ it('accepts explicit HTML escape arguments only when their values are known and 
     'unknown encoding' => ['htmlspecialchars($_GET["name"], ENT_QUOTES, $encoding)', true],
     'invalid encoding' => ['htmlspecialchars($_GET["name"], ENT_QUOTES, "invalid")', true],
     'unpacked argument' => ['htmlspecialchars($_GET["name"], ...$flags)', true],
+    'unknown named argument' => ['htmlspecialchars(invalid: $_GET["name"])', true],
+    'duplicate argument' => ['htmlspecialchars(string: $_GET["name"], string: "fixed")', true],
+    'missing string argument' => ['htmlspecialchars(flags: $_GET["name"])', true],
+]);
+
+it('checks called input callbacks and their arguments', function (string $expression, bool $hasInput): void {
+    $nodes = (new ParserFactory())->createForNewestSupportedVersion()->parse('<?php ' . $expression . ';');
+    $scope = $this->createStub(Scope::class);
+    $provider = $this->createStub(ReflectionProvider::class);
+
+    expect(RequestInput::inHtml(
+        $nodes[0]->expr,
+        $scope,
+        $provider,
+        null,
+        static fn (string $variable): bool => $variable === 'tainted',
+    ))->toBe($hasInput);
+})->with([
+    'called input' => ['$tainted()', true],
+    'unknown callback' => ['$other()', false],
+    'input argument' => ['$other($_GET["name"])', true],
+    'first class callable' => ['$tainted(...)', false],
+    'captured callback' => ['(fn () => $tainted())()', true],
+    'shadowed callback' => ['(fn ($tainted) => $tainted())("fixed")', false],
 ]);

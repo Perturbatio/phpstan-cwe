@@ -65,6 +65,11 @@ class Cwe79RuleTestCase extends RuleTestCase
     {
         $this->analyse([__DIR__ . '/../fixtures/CWE-79/callable-output.php'], $expectedErrors);
     }
+
+    public function checkOutputContextsFixture(array $expectedErrors): void
+    {
+        $this->analyse([__DIR__ . '/../fixtures/CWE-79/output-contexts.php'], $expectedErrors);
+    }
 }
 
 uses(Cwe79RuleTestCase::class);
@@ -103,7 +108,7 @@ it('checks returned input from immediately invoked anonymous functions', functio
     $message = 'CWE-79: Request input is sent to HTML without an HTML escape call. Severity: high. Probability: 80%. https://cwe.mitre.org/data/definitions/79.html';
     $this->checkImmediateCallsFixture(array_map(
         static fn (int $line): array => [$message, $line],
-        [4, 5, 7, 15, 17, 18, 19],
+        [4, 5, 9, 29, 33, 34, 39],
     ));
 });
 
@@ -111,7 +116,15 @@ it('tracks arrow callbacks and recognises explicit HTML escape flags', function 
     $message = 'CWE-79: Request input is sent to HTML without an HTML escape call. Severity: high. Probability: 80%. https://cwe.mitre.org/data/definitions/79.html';
     $this->checkCallableOutputFixture(array_map(
         static fn (int $line): array => [$message, $line],
-        [3, 5, 7, 15, 22, 24, 25, 28, 31, 39, 42, 43],
+        [3, 7, 9, 17, 24, 26, 27, 30, 33, 41, 44, 45],
+    ));
+});
+
+it('checks HTML output and documents unsupported JavaScript and URL contexts', function (): void {
+    $message = 'CWE-79: Request input is sent to HTML without an HTML escape call. Severity: high. Probability: 80%. https://cwe.mitre.org/data/definitions/79.html';
+    $this->checkOutputContextsFixture(array_map(
+        static fn (int $line): array => [$message, $line],
+        [3, 6, 10, 15, 16],
     ));
 });
 

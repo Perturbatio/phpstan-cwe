@@ -98,11 +98,51 @@ Finish with formatting, static analysis, the full test suite, coverage, mutation
 ### CWE-98: Improper Control of Filename for Include/Require Statement
 
 * Detect `include`, `include_once`, `require`, and `require_once` calls with direct request input.
+* Detect the same methods with indirect request input (e.g., `$file = $_GET['file']; include $file;`).
+
 
 ### CWE-470: Use of Externally-Controlled Input to Select Classes or Code ('Unsafe Reflection')
 
-* Detect `new $className()` with direct request input.
+#### Class instantiation
+  * Detect `new $className()` with direct request input.
+  * Detect `new $className($args)` with direct request input.
+  * Detect `new $className(...$args)` with direct request input.
+  * Detect `new $className($arg1, $arg2, ...)` with direct request input.
+#### ReflectionClass
+  * Detect `ReflectionClass($className)` with direct request input.
+  * Detect `ReflectionClass::newInstance($args)` with direct request input.
+  * Detect `ReflectionClass::newInstanceArgs($args)` with direct request input.
+  * Detect `ReflectionClass::newInstanceWithoutConstructor()` with direct request input.
+
+#### ReflectionMethod
+  * Detect `ReflectionMethod($className, $methodName)` with direct request input.
+  * Detect `ReflectionMethod::invoke($object, $args)` with direct request input.
+  * Detect `ReflectionMethod::invokeArgs($object, $args)` with direct request input.
+
+#### ReflectionFunction
+  * Detect `ReflectionFunction($functionName)` with direct request input.
+  * Detect `ReflectionFunction::invoke($args)` with direct request input.
+  * Detect `ReflectionFunction::invokeArgs($args)` with direct request input.
+
+#### ReflectionProperty
+  * Detect `ReflectionProperty($className, $propertyName)` with direct request input.
+  * Detect `ReflectionProperty::getValue($object)` with direct request input.
+  * Detect `ReflectionProperty::setValue($object, $value)` with direct request input.
+
+#### ReflectionParameter
+  * Detect `ReflectionParameter($functionName, $parameterName)` with direct request input.
+
+#### Variable functions and methods
+* `$func()`
+* `$obj->$method()`
+* `Class::$method()`
+
 * Detect `call_user_func($functionName)` with direct request input.
 * Detect `call_user_func_array($functionName, $args)` with direct request input.
 * Detect `forward_static_call($functionName, $args)` with direct request input.
 * Detect `forward_static_call_array($functionName, $args)` with direct request input.
+* is_a() / is_subclass_of() - with request input - Checks class type or inheritance. With $allow_string = true, a string class name from user input can trigger autoloading before type checks complete.
+
+From the PHP Docs:
+
+    allow_string - If this parameter is set to false, a string class name as object_or_class is not allowed. This also prevents calling the autoloader if the class doesn't exist.
