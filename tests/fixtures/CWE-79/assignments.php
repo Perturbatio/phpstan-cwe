@@ -63,7 +63,7 @@ class SecondOutput
 
 $callback = function (): void {
     echo $_GET['name']; // Report: Direct closure output is still checked.
-    $name = $_POST['name']; // No report: Closure assignments are not tracked.
+    $name = $_POST['name']; // No report: This is an assignment, not output.
 };
 echo $name; // No report: A closure assignment does not change the outer value.
 echo $missing; // No report: There is no known request source.

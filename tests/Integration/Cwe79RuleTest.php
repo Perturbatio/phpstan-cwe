@@ -50,6 +50,21 @@ class Cwe79RuleTestCase extends RuleTestCase
     {
         $this->analyse([__DIR__ . '/../fixtures/CWE-79/assignments.php'], $expectedErrors);
     }
+
+    public function checkClosuresFixture(array $expectedErrors): void
+    {
+        $this->analyse([__DIR__ . '/../fixtures/CWE-79/closures.php'], $expectedErrors);
+    }
+
+    public function checkImmediateCallsFixture(array $expectedErrors): void
+    {
+        $this->analyse([__DIR__ . '/../fixtures/CWE-79/immediate-calls.php'], $expectedErrors);
+    }
+
+    public function checkCallableOutputFixture(array $expectedErrors): void
+    {
+        $this->analyse([__DIR__ . '/../fixtures/CWE-79/callable-output.php'], $expectedErrors);
+    }
 }
 
 uses(Cwe79RuleTestCase::class);
@@ -73,6 +88,30 @@ it('tracks local values through modifications without losing escape or scope che
     $this->checkAssignmentsFixture(array_map(
         static fn (int $line): array => [$message, $line],
         [6, 8, 11, 13, 15, 19, 29, 31, 34, 39, 52, 65, 71, 73],
+    ));
+});
+
+it('tracks closure-local assignments without mixing scopes or closure bodies', function (): void {
+    $message = 'CWE-79: Request input is sent to HTML without an HTML escape call. Severity: high. Probability: 80%. https://cwe.mitre.org/data/definitions/79.html';
+    $this->checkClosuresFixture(array_map(
+        static fn (int $line): array => [$message, $line],
+        [8, 13, 17, 20, 29, 30, 33],
+    ));
+});
+
+it('checks returned input from immediately invoked anonymous functions', function (): void {
+    $message = 'CWE-79: Request input is sent to HTML without an HTML escape call. Severity: high. Probability: 80%. https://cwe.mitre.org/data/definitions/79.html';
+    $this->checkImmediateCallsFixture(array_map(
+        static fn (int $line): array => [$message, $line],
+        [4, 5, 7, 15, 17, 18, 19],
+    ));
+});
+
+it('tracks arrow callbacks and recognises explicit HTML escape flags', function (): void {
+    $message = 'CWE-79: Request input is sent to HTML without an HTML escape call. Severity: high. Probability: 80%. https://cwe.mitre.org/data/definitions/79.html';
+    $this->checkCallableOutputFixture(array_map(
+        static fn (int $line): array => [$message, $line],
+        [3, 5, 7, 15, 22, 24, 25, 28, 31, 39, 42, 43],
     ));
 });
 
@@ -114,8 +153,8 @@ it('keeps the report metadata and source location for assigned input', function 
     $file = __DIR__ . '/../fixtures/CWE-79/cwe79.php';
     $node = new PHPStan\Node\CollectedDataNode([
         $file => [Cwe79Collector::class => [
-            ['kind' => 'assignment', 'scope' => 'file', 'offset' => 10, 'variable' => 'name', 'request' => true, 'variables' => []],
-            ['kind' => 'sink', 'scope' => 'file', 'offset' => 20, 'line' => 10, 'request' => false, 'variables' => ['name'], 'expression' => '$name'],
+            ['kind' => 'assignment', 'scope' => 'file', 'offset' => 10, 'startOffset' => 9, 'variable' => 'name', 'request' => true, 'variables' => []],
+            ['kind' => 'sink', 'scope' => 'file', 'offset' => 20, 'startOffset' => 19, 'line' => 10, 'request' => false, 'variables' => ['name'], 'expression' => '$name'],
         ]],
     ], false);
     $errors = (new Cwe79Rule())->processNode($node, $this->createStub(PHPStan\Analyser\Scope::class));

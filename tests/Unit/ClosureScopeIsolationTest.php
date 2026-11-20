@@ -46,3 +46,16 @@ it('uses the assignment start rather than its end to select a scope', function (
         [$events[3], 'other'],
     ]);
 });
+
+it('uses a sink start when its end is at a closure boundary', function (): void {
+    $events = [
+        ['kind' => 'scope', 'scope' => 'run', 'offset' => 10, 'endOffset' => 30],
+        ['kind' => 'sink', 'scope' => 'run', 'startOffset' => 20, 'offset' => 30],
+        ['kind' => 'sink', 'scope' => 'run', 'startOffset' => 30, 'offset' => 30],
+    ];
+
+    expect(ClosureScopeIsolation::isolate($events, static fn (array $sink): int => $sink['startOffset']))->toBe([
+        [$events[1], 'run::closure1'],
+        [$events[2], 'run'],
+    ]);
+});

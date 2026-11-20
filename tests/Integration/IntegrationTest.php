@@ -363,7 +363,7 @@ it('reports missing CWE-95 annotation reasons and shows a copyable annotation ti
 it('checks Laravel request input at HTML output with both package configurations', function (string $config): void {
     $result = analyseWithConfig($config, 'tests/fixtures/CWE-79/laravel.php');
     $messages = array_values($result['files'])[0]['messages'];
-    $expectedLines = [52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 67, 68, 73, 74, 85];
+    $expectedLines = [52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 67, 68, 73, 74, 85, 94, 100];
     $expectedMessage = 'CWE-79: Request input is sent to HTML without an HTML escape call. Severity: high. Probability: 80%. https://cwe.mitre.org/data/definitions/79.html';
 
     expect($result['totals']['file_errors'])->toBe(count($expectedLines))
@@ -388,6 +388,78 @@ it('tracks assigned HTML input with both package configurations', function (stri
             'Probability: 80%.',
             'https://cwe.mitre.org/data/definitions/79.html',
         );
+    }
+})->with(['config/cwe79.neon', 'tests/fixtures/shared/extension.neon']);
+
+it('isolates closure-local HTML findings with both package configurations', function (string $config): void {
+    $result = analyseWithConfig($config, 'tests/fixtures/CWE-79/closures.php', true);
+    $messages = array_values($result['files'])[0]['messages'];
+    $expectedLines = [8, 13, 17, 20, 29, 30, 33];
+
+    expect(array_column($messages, 'line'))->toBe($expectedLines)
+        ->and(array_column($messages, 'identifier'))->toBe(array_fill(0, count($expectedLines), 'phpstanCwe.cwe79'))
+        ->and(array_column($messages, 'ignorable'))->toBe(array_fill(0, count($expectedLines), true))
+        ->and($messages[2]['message'])->not->toBe($messages[3]['message'])
+        ->and(analyseWithConfig($config, 'tests/fixtures/CWE-79/closures.php', true))->toBe($result);
+})->with(['config/cwe79.neon', 'tests/fixtures/shared/extension.neon']);
+
+it('reports directly invoked anonymous return values through both package configurations', function (string $config): void {
+    $result = analyseWithConfig($config, 'tests/fixtures/CWE-79/immediate-calls.php');
+    $file = dirname(__DIR__, 2) . '/tests/fixtures/CWE-79/immediate-calls.php';
+    $messages = $result['files'][$file]['messages'];
+    $lines = [4, 5, 7, 15, 17, 18, 19];
+
+    expect(array_column($messages, 'line'))->toBe($lines)
+        ->and(array_column($messages, 'identifier'))->toBe(array_fill(0, count($lines), 'phpstanCwe.cwe79'))
+        ->and(array_column($messages, 'ignorable'))->toBe(array_fill(0, count($lines), true));
+    foreach ($messages as $message) {
+        expect($message['message'])->toContain(
+            'Severity: high.',
+            'Probability: 80%.',
+            'https://cwe.mitre.org/data/definitions/79.html',
+        );
+    }
+})->with(['config/cwe79.neon', 'tests/fixtures/shared/extension.neon']);
+
+it('tracks arrow callbacks and explicit HTML escaping with both package configurations', function (string $config): void {
+    $result = analyseWithConfig($config, 'tests/fixtures/CWE-79/callable-output.php');
+    $file = dirname(__DIR__, 2) . '/tests/fixtures/CWE-79/callable-output.php';
+    $messages = $result['files'][$file]['messages'];
+    $lines = [3, 5, 7, 15, 22, 24, 25, 28, 31, 39, 42, 43];
+
+    expect(array_column($messages, 'line'))->toBe($lines)
+        ->and(array_column($messages, 'identifier'))->toBe(array_fill(0, count($lines), 'phpstanCwe.cwe79'))
+        ->and(array_column($messages, 'ignorable'))->toBe(array_fill(0, count($lines), true));
+    foreach ($messages as $message) {
+        expect($message['message'])->toContain('Severity: high.', 'Probability: 80%.', 'https://cwe.mitre.org/data/definitions/79.html');
+    }
+})->with(['config/cwe79.neon', 'tests/fixtures/shared/extension.neon']);
+
+it('keeps CWE-79 closure annotations valid after comments and blank lines change', function (string $config): void {
+    $fixture = tempnam(sys_get_temp_dir(), 'phpstan-cwe79-');
+    if ($fixture === false) {
+        throw new RuntimeException('Cannot create a temporary PHP fixture.');
+    }
+
+    try {
+        $code = file_get_contents(__DIR__ . '/../fixtures/CWE-79/closures.php');
+        file_put_contents($fixture, $code);
+        $first = analyseWithConfig($config, $fixture, true);
+        $messages = array_values($first['files'])[0]['messages'];
+        expect($messages)->toHaveCount(7);
+
+        $annotation = substr($messages[0]['tip'], strpos($messages[0]['tip'], '// @phpstan-ignore'));
+        $annotation = str_replace('(<reason>)', '(Reviewed local output)', $annotation);
+        $updated = str_replace('    echo $copy; // Report: Closure-local input reaches output.', "    $annotation\n    echo \$copy; // Report: Closure-local input reaches output.", $code);
+        $updated = str_replace("<?php\n", "<?php\n\n// Review comment.\n\n", $updated);
+        file_put_contents($fixture, $updated);
+
+        $ignored = analyseWithConfig($config, $fixture, true);
+        $remaining = array_values($ignored['files'])[0]['messages'];
+        expect(array_column($remaining, 'identifier'))->toBe(array_fill(0, 6, 'phpstanCwe.cwe79'))
+            ->and(array_column($remaining, 'message'))->toBe(array_column(array_slice($messages, 1), 'message'));
+    } finally {
+        unlink($fixture);
     }
 })->with(['config/cwe79.neon', 'tests/fixtures/shared/extension.neon']);
 

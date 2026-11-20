@@ -31,20 +31,20 @@ it('records local dependencies once with assignment and output positions', funct
     $assignment = new Expr\AssignOp\Concat(
         new Expr\Variable('html'),
         new Expr\BinaryOp\Concat(new Expr\Variable('html'), new Expr\Variable('name')),
-        ['endTokenPos' => 20],
+        ['startTokenPos' => 10, 'endTokenPos' => 20],
     );
     $event = $this->collector->processNode($assignment, $this->scope);
     expect($this->collector->getNodeType())->toBe(Node::class)
         ->and($event)->toBe([
-            'kind' => 'assignment', 'scope' => '::file', 'offset' => 20,
+            'kind' => 'assignment', 'scope' => '::file', 'offset' => 20, 'startOffset' => 10,
             'variable' => 'html', 'request' => false, 'variables' => ['html', 'name'],
         ]);
     $output = new Node\Stmt\Echo_(
         [new String_('prefix'), new Expr\Variable('html')],
-        ['endTokenPos' => 30, 'startLine' => 4],
+        ['startTokenPos' => 25, 'endTokenPos' => 30, 'startLine' => 4],
     );
     expect($this->collector->processNode($output, $this->scope))->toBe([
-        'kind' => 'sink', 'scope' => '::file', 'offset' => 30, 'line' => 4,
+        'kind' => 'sink', 'scope' => '::file', 'offset' => 30, 'startOffset' => 25, 'line' => 4,
         'expression' => "'prefix', \$html",
         'request' => false, 'variables' => ['html'],
     ]);
@@ -98,18 +98,27 @@ it('returns output dependencies once as a list across echo expressions', functio
     expect($event['variables'])->toBe(['first', 'second']);
 });
 
-it('keeps direct closure checks but does not use or change outer variable facts', function (): void {
+it('records local assignments and output dependencies inside anonymous functions', function (): void {
     $this->scope->method('isInAnonymousFunction')->willReturn(true);
     expect($this->collector->processNode(
         new Expr\Assign(new Expr\Variable('name'), new Expr\Variable('_GET')),
         $this->scope,
-    ))->toBeNull()
+    ))->toMatchArray(['kind' => 'assignment', 'request' => true, 'variables' => []])
         ->and($this->collector->processNode(
             new Expr\Print_(new Expr\Variable('name')),
             $this->scope,
-        ))->toMatchArray(['request' => false, 'variables' => []])
+        ))->toMatchArray(['request' => false, 'variables' => ['name']])
         ->and($this->collector->processNode(
             new Expr\Print_(new Expr\Variable('_GET')),
             $this->scope,
         ))->toMatchArray(['request' => true, 'variables' => []]);
 });
+
+it('records closure and arrow function bounds', function (Node $node): void {
+    expect($this->collector->processNode($node, $this->scope))->toBe([
+        'kind' => 'scope', 'scope' => '::file', 'offset' => 10, 'endOffset' => 30,
+    ]);
+})->with([
+    'closure' => [new Expr\Closure([], ['startTokenPos' => 10, 'endTokenPos' => 30])],
+    'arrow' => [new Expr\ArrowFunction(['expr' => new Expr\Variable('value')], ['startTokenPos' => 10, 'endTokenPos' => 30])],
+]);

@@ -70,7 +70,7 @@ it('suppresses a CWE-79 finding with a package annotation and reports an annotat
     $file = __DIR__ . '/../fixtures/CWE-79/cwe79.php';
     $other = __DIR__ . '/../fixtures/CWE-79/assignments.php';
     $fingerprint = CweFingerprint::make(79, [$file, 'file', '$_GET["a"]']);
-    $sink = ['kind' => 'sink', 'scope' => 'file', 'offset' => 20, 'line' => 5, 'request' => true, 'variables' => [], 'expression' => '$_GET["a"]'];
+    $sink = ['kind' => 'sink', 'scope' => 'file', 'offset' => 20, 'startOffset' => 19, 'line' => 5, 'request' => true, 'variables' => [], 'expression' => '$_GET["a"]'];
     $node = new CollectedDataNode([
         $file => [
             Cwe79Collector::class => [$sink, $sink],
@@ -195,7 +195,7 @@ it('gives each rule its own CWE number in tips, fingerprints, and annotation rep
     $fingerprint78 = CweFingerprint::make(78, [$file78, 'S', 'shell_exec($c)', '000']);
 
     $file79 = __DIR__ . '/../fixtures/CWE-79/cwe79.php';
-    $sink79 = ['kind' => 'sink', 'scope' => 'S', 'offset' => 20, 'line' => 5, 'request' => true, 'variables' => [], 'expression' => '$_GET["a"]'];
+    $sink79 = ['kind' => 'sink', 'scope' => 'S', 'offset' => 20, 'startOffset' => 19, 'line' => 5, 'request' => true, 'variables' => [], 'expression' => '$_GET["a"]'];
     $errors79 = (new Cwe79Rule())->processNode(new CollectedDataNode([$file79 => [
         Cwe79Collector::class => [$sink79],
         CweIgnoreCollector::class => [[ignoreEventFor(79, $file79, $stale)]],

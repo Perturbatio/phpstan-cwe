@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Perturbatio\PhpstanCwe\Rules\Cwe79;
 
+use Perturbatio\PhpstanCwe\ClosureScopeIsolation;
 use Perturbatio\PhpstanCwe\CweFileReports;
 use Perturbatio\PhpstanCwe\CweReport;
 use Perturbatio\PhpstanCwe\Ignore\CweFingerprint;
@@ -16,6 +17,7 @@ use PHPStan\Rules\Rule;
 
 /**
  * @phpstan-import-type HtmlEvent from Cwe79Collector
+ * @phpstan-import-type HtmlFlowEvent from Cwe79Collector
  * @implements Rule<CollectedDataNode>
  */
 final class Cwe79Rule implements Rule
@@ -58,8 +60,14 @@ final class Cwe79Rule implements Rule
      */
     private function reportsForFile(string $file, array $events, CweFileReports $reports): void
     {
-        foreach (LocalAssignmentFlow::sinks($events, $this->resolveInput(...)) as [$event, $request]) {
-            if (!$request) {
+        $flowEvents = [];
+        foreach (ClosureScopeIsolation::isolate($events, static fn (array $sink): int => $sink['startOffset']) as [$event, $scope]) {
+            $event['scope'] = $scope;
+            $flowEvents[] = $event;
+        }
+
+        foreach (LocalAssignmentFlow::sinks($flowEvents, $this->resolveInput(...)) as [$event, $facts]) {
+            if (!$facts['value']) {
                 continue;
             }
 
@@ -76,20 +84,29 @@ final class Cwe79Rule implements Rule
     }
 
     /**
-     * @param HtmlEvent $event
-     * @param array<string, bool> $variables
+     * @param HtmlFlowEvent $event
+     * @param array<string, array{value: bool, callable: bool}> $variables
+     * @return array{value: bool, callable: bool}
      */
-    private function resolveInput(array $event, array $variables): bool
+    private function resolveInput(array $event, array $variables): array
     {
-        if ($event['request']) {
-            return true;
-        }
+        $request = $event['request'];
         foreach ($event['variables'] as $variable) {
-            if ($variables[$variable] ?? false) {
-                return true;
-            }
+            $request = $request || ($variables[$variable]['value'] ?? false);
+        }
+        foreach ($event['calledVariables'] ?? [] as $variable) {
+            $request = $request || ($variables[$variable]['callable'] ?? false);
         }
 
-        return false;
+        if ($event['kind'] === 'assignment' && ($event['isArrow'] ?? false)) {
+            return ['value' => false, 'callable' => $request];
+        }
+
+        return [
+            'value' => $request,
+            'callable' => $event['kind'] === 'assignment' && isset($event['copiedVariable'])
+                ? ($variables[$event['copiedVariable']]['callable'] ?? false)
+                : false,
+        ];
     }
 }

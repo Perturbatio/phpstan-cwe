@@ -56,7 +56,7 @@ change it.
 | Rule | Identity |
 | --- | --- |
 | CWE-78 | Function or method name, sink expression, and the detected facts (request input, fixed text, assignment) |
-| CWE-79 PHP | Function or method name and printed expression |
+| CWE-79 PHP | Function or method name, closure position, and printed expression |
 | CWE-79 Blade | Normalised raw echo expression |
 | CWE-89 | Function or method name, sink expression, and the kind (direct or Laravel). Laravel findings also use the status of the value |
 | CWE-95 | Function or method name, closure position, `eval()` expression, input sources, and method calls that assign unknown values that reach `eval()` |
@@ -68,7 +68,8 @@ change it.
   fingerprints. Review its annotations again.
 - A change to the checked expression or to the detected facts creates a new
   fingerprint. The old annotation is then reported as stale.
-- A closure is part of the identity only where the rule documents it (CWE-95).
+- A closure is part of the identity only where the rule documents it (CWE-79
+  PHP and CWE-95).
 - In PHP, the package does not check the reason of a native PHPStan annotation.
   Native PHPStan annotations, baselines, and `ignoreErrors` can still hide a finding
   without a fingerprint or a reason.

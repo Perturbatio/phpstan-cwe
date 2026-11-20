@@ -52,12 +52,20 @@ The rule follows copies, concatenation, `.=` assignments, interpolation, and
 input passed to calls such as `trim()` or `strtoupper()`. These calls do not
 escape HTML. A later assignment replaces the earlier facts for that variable.
 Copies keep the facts from the time of the copy. Facts are kept separate for
-each file, named function, and class method. The command and Laravel SQL rules
+each file, named function, class method, closure, and arrow function.
+The command and Laravel SQL rules
 use the same `LocalAssignmentFlow` class to process assignment events.
 
+For a directly invoked closure or arrow function, the rule checks its return
+expressions for request input. It applies the same HTML escape checks.
+It also follows a locally assigned arrow function when the code calls it.
+For arrow functions, it follows captured local values from the time of the
+assignment or direct call.
+
 The rule does not check JavaScript, CSS, URLs, templates, or other output functions.
-It treats a call to
-`htmlspecialchars()` or `htmlentities()` with only one argument as safe.
+It treats a call to `htmlspecialchars()` or `htmlentities()` as safe when
+it uses the default flags or a known flag value that includes `ENT_QUOTES`.
+If the call gives an encoding, the rule accepts only a known `UTF-8` value.
 These functions use quote escape flags by default in PHP 8.1 and later.
 In a namespace, use `\htmlspecialchars()` or `\htmlentities()` to show
 that the call uses the PHP function and not a local function.
@@ -69,10 +77,15 @@ contexts by hand; this rule is not a full security check.
 - Assignment tracking uses source order, not execution paths. It does not
   merge branches or repeat loops. A later assignment in one branch can hide
   input from another branch.
-- It does not follow values across function calls, closure captures,
+- It does not follow values across named function calls, closure captures,
   references, properties, array writes, or destructuring assignments.
-- It checks direct output inside closures, but does not track their local
-  assignments.
+- For a directly invoked closure, it does not follow local assignments or
+  captured values into return expressions. It checks all return expressions
+  without checking which branch runs.
+- The rule follows captures into an arrow function's returned value. It does
+  not follow captured values into output statements inside the arrow function.
+- It tracks locally assigned arrow functions and their copies, not closures
+  assigned to variables or other callback forms.
 - It tracks `=` and `.=` only. Other assignment operators are not tracked.
 - Assignments inside output expressions are not tracked in PHP evaluation
   order. Put assignments before output for this check.
@@ -81,5 +94,9 @@ contexts by hand; this rule is not a full security check.
 - An unknown source does not prove that a value is safe.
 
 For fingerprint-based ignore annotations, read the [shared ignore-annotation guide](../../Ignore/CweIgnore.md).
+The fingerprint for output inside a closure or arrow function uses its
+position in source order. Earlier versions did not include that position.
+Review and replace old annotations for these findings. If you add, remove, or
+move a closure or arrow function, review the annotations again.
 
 Full explanation: https://cwe.mitre.org/data/definitions/79.html

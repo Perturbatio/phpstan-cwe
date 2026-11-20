@@ -85,3 +85,18 @@ namespace App {
     echo \request('name'); // Report: The global helper holds request input.
     echo \htmlspecialchars(\request('name')); // No report: The global escape function protects input.
 }
+
+namespace {
+    function renderLaravelClosure(): void
+    {
+        $render = function (): void {
+            $name = request('name');
+            echo $name; // Report: Closure-local Laravel input reaches output.
+            echo htmlspecialchars($name); // No report: The value is escaped.
+        };
+        echo $render; // No report: The closure body is not the assigned value.
+    }
+
+    echo (fn () => request('name'))(); // Report: The arrow returns Laravel input.
+    echo (function () { return htmlspecialchars(request('name')); })(); // No report: The return value is escaped.
+}
