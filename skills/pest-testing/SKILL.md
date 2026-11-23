@@ -43,6 +43,7 @@ it('is true', function () {
 - Run file: `./vendor/bin/pest --no-tia --compact tests/Feature/ExampleTest.php`.
 - DO NOT use the -q option since this can suppress some errors
 - All tests must have 100% code coverage use `./vendor/bin/pest --no-tia --coverage --min=100` to check coverage.
+- Ensure that code paths are covered by tests, including error paths, exceptions, and edge cases. Wherever there is a conditional branch, there should be a test that covers each branch.
 
 ## Assertions
 

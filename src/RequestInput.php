@@ -10,7 +10,9 @@ use PhpParser\Node\Expr\Cast\Int_;
 use PhpParser\Node\Expr\ArrowFunction;
 use PhpParser\Node\Expr\Closure;
 use PhpParser\Node\Expr\FuncCall;
+use PhpParser\Node\Expr\Match_;
 use PhpParser\Node\Expr\Print_;
+use PhpParser\Node\Expr\Ternary;
 use PhpParser\Node\Expr\Variable;
 use PhpParser\Node\Name;
 use PhpParser\Node\Name\FullyQualified;
@@ -110,10 +112,44 @@ final class RequestInput
     }
 
     /**
-     * @param (callable(FuncCall): bool)|null $isSafeHtmlEscape
-     * @param (callable(Node): bool)|null $isAdditionalRequestInput
-     * @param (callable(string): bool)|null $isAssignedInput
-     * @param (callable(string): bool)|null $isCalledInput
+     * Find request input in an inclusion filename.
+     *
+     * @param  Node  $node
+     * @param  Scope  $scope
+     * @param  ReflectionProvider  $reflectionProvider
+     * @param  (callable(string): bool)|null  $isAssignedInput
+     * @return bool
+     */
+    public static function inInclude(
+        Node $node,
+        Scope $scope,
+        ReflectionProvider $reflectionProvider,
+        ?callable $isAssignedInput = null,
+    ): bool {
+        $laravelRequestInput = new LaravelRequestInput($reflectionProvider);
+
+        return self::contains(
+            $node,
+            null,
+            static fn (Node $source): bool => $laravelRequestInput->isInput($source, $scope),
+            $isAssignedInput,
+            true,
+            null,
+            false,
+            true,
+        );
+    }
+
+    /**
+     * @param  Node  $node
+     * @param  (callable(FuncCall): bool)|null  $isSafeHtmlEscape
+     * @param  (callable(Node): bool)|null  $isAdditionalRequestInput
+     * @param  (callable(string): bool)|null  $isAssignedInput
+     * @param  bool  $skipAnonymousFunctions
+     * @param  (callable(string): bool)|null  $isCalledInput
+     * @param  bool  $ignoreNumericCasts
+     * @param  bool  $matchResultsOnly
+     * @return bool
      */
     private static function contains(
         Node $node,
@@ -122,6 +158,8 @@ final class RequestInput
         ?callable $isAssignedInput = null,
         bool $skipAnonymousFunctions = false,
         ?callable $isCalledInput = null,
+        bool $ignoreNumericCasts = true,
+        bool $matchResultsOnly = false,
     ): bool {
         if ($skipAnonymousFunctions && $node instanceof FuncCall
             && $node->name instanceof Variable && is_string($node->name->name) && !$node->isFirstClassCallable()
@@ -130,7 +168,7 @@ final class RequestInput
                 return true;
             }
             foreach ($node->getArgs() as $argument) {
-                if (self::contains($argument, $isSafeHtmlEscape, $isAdditionalRequestInput, $isAssignedInput, true, $isCalledInput)) {
+                if (self::contains($argument, $isSafeHtmlEscape, $isAdditionalRequestInput, $isAssignedInput, true, $isCalledInput, $ignoreNumericCasts, $matchResultsOnly)) {
                     return true;
                 }
             }
@@ -157,13 +195,13 @@ final class RequestInput
             $capturedInput = $isAssignedInput === null ? null : static fn (string $variable): bool => !in_array($variable, $parameters, true) && $isAssignedInput($variable);
             $capturedCall = $isCalledInput === null ? null : static fn (string $variable): bool => !in_array($variable, $parameters, true) && $isCalledInput($variable);
             $hasReturnedInput = $node->name instanceof ArrowFunction
-                ? self::contains($node->name->expr, $isSafeHtmlEscape, $isAdditionalRequestInput, $capturedInput, true, $capturedCall)
+                ? self::contains($node->name->expr, $isSafeHtmlEscape, $isAdditionalRequestInput, $capturedInput, true, $capturedCall, $ignoreNumericCasts, $matchResultsOnly)
                 : self::containsReturnedHtmlInput($node->name->stmts, $isSafeHtmlEscape, $isAdditionalRequestInput);
             if ($hasReturnedInput) {
                 return true;
             }
             foreach ($node->args as $argument) {
-                if (self::contains($argument, $isSafeHtmlEscape, $isAdditionalRequestInput, $isAssignedInput, true, $isCalledInput)) {
+                if (self::contains($argument, $isSafeHtmlEscape, $isAdditionalRequestInput, $isAssignedInput, true, $isCalledInput, $ignoreNumericCasts, $matchResultsOnly)) {
                     return true;
                 }
             }
@@ -183,12 +221,16 @@ final class RequestInput
             return true;
         }
 
+        if ($node instanceof Node\Expr\ArrayDimFetch && self::hasPhpRequestRoot($node)) {
+            return true;
+        }
+
         if ($node instanceof Variable && is_string($node->name) && $isAssignedInput !== null) {
             return $isAssignedInput($node->name);
         }
 
         // A number cannot add HTML code or SQL syntax.
-        if ($node instanceof Int_ || $node instanceof Double) {
+        if ($ignoreNumericCasts && ($node instanceof Int_ || $node instanceof Double)) {
             return false;
         }
 
@@ -200,21 +242,51 @@ final class RequestInput
             return true;
         }
 
+        if ($matchResultsOnly && $node instanceof Ternary) {
+            if ($node->if === null) {
+                return self::contains($node->cond, $isSafeHtmlEscape, $isAdditionalRequestInput, $isAssignedInput, $skipAnonymousFunctions, $isCalledInput, $ignoreNumericCasts, true)
+                    || self::contains($node->else, $isSafeHtmlEscape, $isAdditionalRequestInput, $isAssignedInput, $skipAnonymousFunctions, $isCalledInput, $ignoreNumericCasts, true);
+            }
+
+            return self::contains($node->if, $isSafeHtmlEscape, $isAdditionalRequestInput, $isAssignedInput, $skipAnonymousFunctions, $isCalledInput, $ignoreNumericCasts, true)
+                || self::contains($node->else, $isSafeHtmlEscape, $isAdditionalRequestInput, $isAssignedInput, $skipAnonymousFunctions, $isCalledInput, $ignoreNumericCasts, true);
+        }
+
+        if ($matchResultsOnly && $node instanceof Match_) {
+            foreach ($node->arms as $arm) {
+                if (self::contains($arm->body, $isSafeHtmlEscape, $isAdditionalRequestInput, $isAssignedInput, $skipAnonymousFunctions, $isCalledInput, $ignoreNumericCasts, true)) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        $containsInput = false;
         foreach ($node->getSubNodeNames() as $name) {
             $child = $node->$name;
-            if ($child instanceof Node && self::contains($child, $isSafeHtmlEscape, $isAdditionalRequestInput, $isAssignedInput, $skipAnonymousFunctions, $isCalledInput)) {
-                return true;
+            if ($child instanceof Node) {
+                $containsInput = self::contains($child, $isSafeHtmlEscape, $isAdditionalRequestInput, $isAssignedInput, $skipAnonymousFunctions, $isCalledInput, $ignoreNumericCasts, $matchResultsOnly) || $containsInput;
             }
             if (is_array($child)) {
                 foreach ($child as $item) {
-                    if ($item instanceof Node && self::contains($item, $isSafeHtmlEscape, $isAdditionalRequestInput, $isAssignedInput, $skipAnonymousFunctions, $isCalledInput)) {
-                        return true;
+                    if ($item instanceof Node) {
+                        $containsInput = self::contains($item, $isSafeHtmlEscape, $isAdditionalRequestInput, $isAssignedInput, $skipAnonymousFunctions, $isCalledInput, $ignoreNumericCasts, $matchResultsOnly) || $containsInput;
                     }
                 }
             }
         }
 
-        return false;
+        return $containsInput;
+    }
+
+    private static function hasPhpRequestRoot(Node\Expr $expression): bool
+    {
+        if ($expression instanceof Variable) {
+            return in_array($expression->name, ['_GET', '_POST', '_COOKIE', '_REQUEST'], true);
+        }
+
+        return $expression instanceof Node\Expr\ArrayDimFetch && self::hasPhpRequestRoot($expression->var);
     }
 
     /**

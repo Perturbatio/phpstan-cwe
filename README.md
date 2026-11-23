@@ -92,6 +92,10 @@ Use `config/cwe95.neon` to check PHP evaluation of PHP code including user provi
 [CWE-95 rule document](src/Rules/Cwe95/Cwe95Rule.md) for ratings, limitations,
 and fingerprint-based ignore annotations.
 
+Use `config/cwe98.neon` to check dynamic PHP include and require filenames.
+See the [CWE-98 rule document](src/Rules/Cwe98/Cwe98Rule.md) for ratings and
+limitations.
+
 If your project does not use Laravel, select the rules you need instead of
 including the full extension.
 

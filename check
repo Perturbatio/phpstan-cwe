@@ -17,6 +17,7 @@ Examples:
   ./check
   ./check analyse test
   ./check -- --processes=16
+  ./check --mutations-only -- --processes=16
 HELP
 }
 
@@ -37,6 +38,9 @@ while (($#)); do
         format:check|analyse|test|test:mutation:check)
             scripts+=("$1")
             ;;
+        --mutations-only)
+          scripts=(test:mutation:check)
+          ;;
         *)
             printf 'Unknown script or option: %s\n' "$1" >&2
             usage >&2
