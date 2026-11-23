@@ -222,6 +222,76 @@ it('loads the single-rule configuration and full extension', function (string $c
     'tests/fixtures/CWE-98/extension.neon',
 ]);
 
+it('reports Laravel include filenames with their source and probability', function (string $config): void {
+    $result = analyseWithConfig($config, 'tests/fixtures/CWE-98/laravel.php', true);
+    $fixture = realpath(__DIR__ . '/../fixtures/CWE-98/laravel.php');
+    $messages = $result['files'][$fixture]['messages'];
+    $expectedReports = cwe98ExpectedReports([
+        [85, 41],
+        [85, 49],
+        [95, 54],
+        [85, 55],
+        [45, 56],
+        [85, 72],
+    ]);
+
+    expect(array_keys($result['files']))->toBe([$fixture])
+        ->and($result['totals']['file_errors'])->toBe(count($expectedReports))
+        ->and(array_column($messages, 'identifier'))->toBe(array_fill(0, count($expectedReports), 'phpstanCwe.cwe98'))
+        ->and(array_column($messages, 'ignorable'))->toBe(array_fill(0, count($expectedReports), true))
+        ->and(array_map(
+            static fn (array $message): array => [withoutFingerprint($message['message']), $message['line']],
+            $messages,
+        ))->toBe($expectedReports);
+
+    foreach ($messages as $message) {
+        expect($message['message'])->toMatch('/Fingerprint: [a-f0-9]{64}\./')
+            ->and($message['tip'])->toContain('@phpstan-ignore phpstanCwe.cwe98.');
+    }
+})->with([
+    'single rule' => 'config/cwe98.neon',
+    'full extension' => 'tests/fixtures/CWE-98/extension.neon',
+]);
+
+it('tracks Laravel path helpers, list changes, and route parameters', function (): void {
+    $this->analyse([__DIR__ . '/../fixtures/CWE-98/laravel-paths.php'], cwe98ExpectedReports([
+        [85, 9],
+        [60, 10],
+        [60, 12],
+        [95, 22],
+        [85, 28],
+        [95, 32],
+        [95, 42],
+        [85, 47],
+        [60, 49],
+        [60, 53],
+        [95, 73],
+        [60, 79],
+        [60, 90],
+        [45, 92],
+        [60, 101],
+        [95, 110],
+    ]));
+});
+
+it('resolves shadowed path helpers in both configurations', function (string $config): void {
+    $result = analyseWithConfig($config, 'tests/fixtures/CWE-98/laravel-paths.php');
+    $messages = array_values($result['files'])[0]['messages'];
+
+    expect(array_column($messages, 'identifier'))->toBe(array_fill(0, 17, 'phpstanCwe.cwe98'))
+        ->and(array_map(
+            static fn (array $message): array => [$message['message'], $message['line']],
+            $messages,
+        ))->toBe(cwe98ExpectedReports([
+            [85, 9], [60, 10], [60, 12], [60, 13], [95, 22], [85, 28],
+            [95, 32], [95, 42], [85, 47], [60, 49], [60, 53], [95, 73], [60, 79],
+            [60, 90], [45, 92], [60, 101], [95, 110],
+        ]));
+})->with([
+    'single rule' => 'config/cwe98.neon',
+    'full extension' => 'tests/fixtures/CWE-98/extension.neon',
+]);
+
 it('keeps fingerprints stable and applies one ignore annotation to one finding', function (): void {
     $temporaryFile = tempnam(sys_get_temp_dir(), 'phpstan-cwe98-');
     if ($temporaryFile === false) {

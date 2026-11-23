@@ -146,6 +146,18 @@ it('records scope boundaries and assignment dependencies', function (bool $arrow
     ]);
 })->with([false, true]);
 
+it('marks a foreach array and its value as unknown when it uses a reference', function (): void {
+    $scope = $this->createStub(Scope::class);
+    $collector = new Cwe98Collector($this->createStub(ReflectionProvider::class));
+    $nodes = (new ParserFactory())->createForHostVersion()->parse('<?php foreach ($files as &$file) {}');
+    $event = $collector->processNode($nodes[0], $scope);
+
+    expect($event['kind'])->toBe('extraAssignments')
+        ->and(array_column($event['assignments'], 'variable'))->toBe(['files', 'file'])
+        ->and(array_column($event['assignments'], 'unknown'))->toBe([true, true])
+        ->and(array_column($event['assignments'], 'variables'))->toBe([['files' => 95], ['files' => 95]]);
+});
+
 it('does not collect unrelated nodes or unsupported assignment targets', function (): void {
     $scope = $this->createStub(Scope::class);
     $collector = new Cwe98Collector($this->createStub(ReflectionProvider::class));
@@ -155,7 +167,7 @@ it('does not collect unrelated nodes or unsupported assignment targets', functio
 
     expect($collector->processNode(new Node\Stmt\Nop(), $scope))->toBeNull()
         ->and($collector->processNode($nodes[0]->expr, $scope))->toBeNull()
-        ->and($collector->processNode($nodes[1]->expr, $scope))->toBeNull()
+        ->and($collector->processNode($nodes[1]->expr, $scope)['variables'])->toBe(['files' => 95])
         ->and($collector->processNode($nodes[2]->expr, $scope))->toBeNull();
 });
 

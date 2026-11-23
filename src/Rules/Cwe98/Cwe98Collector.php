@@ -6,6 +6,7 @@ namespace Perturbatio\PhpstanCwe\Rules\Cwe98;
 
 use Perturbatio\PhpstanCwe\Ignore\ExpressionText;
 use Perturbatio\PhpstanCwe\LaravelRequestInput;
+use Perturbatio\PhpstanCwe\LaravelRouteParameters;
 use Perturbatio\PhpstanCwe\RequestInput;
 use PhpParser\Node;
 use PhpParser\Node\Expr;
@@ -26,7 +27,8 @@ use PHPStan\Reflection\ReflectionProvider;
  * @phpstan-type Cwe98Assignment array{kind: 'assignment', file: string, scope: string, offset: int, startOffset: int, variable: string, sources: list<string>, requestProbability: int|null, unknown: bool, variables: array<string, int>}
  * @phpstan-type Cwe98Sink array{kind: 'sink', file: string, scope: string, offset: int, startOffset: int, line: int, expression: string, sources: list<string>, requestProbability: int|null, unknown: bool, variables: array<string, int>}
  * @phpstan-type Cwe98Scope array{kind: 'scope', file: string, scope: string, offset: int, endOffset: int}
- * @phpstan-type Cwe98Event Cwe98Assignment|Cwe98Sink|Cwe98Scope
+ * @phpstan-type Cwe98ExtraAssignments array{kind: 'extraAssignments', file: string, scope: string, assignments: list<Cwe98Assignment>}
+ * @phpstan-type Cwe98Event Cwe98Assignment|Cwe98Sink|Cwe98Scope|Cwe98ExtraAssignments
  * @implements Collector<Node, Cwe98Event|null>
  */
 final class Cwe98Collector implements Collector
@@ -47,6 +49,29 @@ final class Cwe98Collector implements Collector
     /** @return Cwe98Event|null */
     public function processNode(Node $node, Scope $scope): ?array
     {
+        if ($node instanceof Expr\StaticCall) {
+            $parameters = LaravelRouteParameters::fromCall($node, $scope);
+            if ($parameters !== []) {
+                $assignments = [];
+                foreach ($parameters as $parameter) {
+                    $assignments[] = [
+                        'kind' => 'assignment',
+                        'file' => $scope->getFile(),
+                        'scope' => $this->scopeName($scope),
+                        'offset' => $parameter['offset'],
+                        'startOffset' => $parameter['offset'],
+                        'variable' => $parameter['variable'],
+                        'sources' => ['laravel:route:' . $parameter['variable']],
+                        'requestProbability' => Cwe98Rule::getUnchangedInputProbability(),
+                        'unknown' => false,
+                        'variables' => [],
+                    ];
+                }
+
+                return ['kind' => 'extraAssignments', 'file' => $scope->getFile(), 'scope' => $this->scopeName($scope), 'assignments' => $assignments];
+            }
+        }
+
         if ($node instanceof Closure || $node instanceof ArrowFunction) {
             return [
                 'kind' => 'scope',
@@ -57,12 +82,82 @@ final class Cwe98Collector implements Collector
             ];
         }
 
-        if (($node instanceof Assign || $node instanceof Concat)
+        if ($node instanceof Node\Stmt\Foreach_ && $node->valueVar instanceof Variable
+            && is_string($node->valueVar->name)
+        ) {
+            $facts = $this->expressionFacts($node->expr, $scope);
+            $facts['unknown'] = $facts['unknown'] || $node->byRef;
+
+            $assignment = [
+                'kind' => 'assignment',
+                'file' => $scope->getFile(),
+                'scope' => $this->scopeName($scope),
+                'offset' => $node->valueVar->getEndTokenPos(),
+                'startOffset' => $node->getStartTokenPos(),
+                'variable' => $node->valueVar->name,
+                ...$facts,
+            ];
+            if ($node->byRef && $node->expr instanceof Variable && is_string($node->expr->name)) {
+                $arrayAssignment = $assignment;
+                $arrayAssignment['variable'] = $node->expr->name;
+
+                return ['kind' => 'extraAssignments', 'file' => $scope->getFile(), 'scope' => $this->scopeName($scope), 'assignments' => [$arrayAssignment, $assignment]];
+            }
+
+            return $assignment;
+        }
+
+        if ($node instanceof Expr\AssignRef && $node->var instanceof Variable
+            && is_string($node->var->name) && $node->expr instanceof Variable
+            && is_string($node->expr->name) && $scope->getType($node->expr)->isArray()->yes()
+        ) {
+            $assignments = [];
+            foreach ([$node->expr->name, $node->var->name] as $variable) {
+                $assignments[] = [
+                    'kind' => 'assignment',
+                    'file' => $scope->getFile(),
+                    'scope' => $this->scopeName($scope),
+                    'offset' => $node->getEndTokenPos(),
+                    'startOffset' => $node->getStartTokenPos(),
+                    'variable' => $variable,
+                    'sources' => [],
+                    'requestProbability' => null,
+                    'unknown' => true,
+                    'variables' => [$node->expr->name => Cwe98Rule::getUnchangedInputProbability()],
+                ];
+            }
+
+            return ['kind' => 'extraAssignments', 'file' => $scope->getFile(), 'scope' => $this->scopeName($scope), 'assignments' => $assignments];
+        }
+
+        if (($node instanceof Assign || $node instanceof Expr\AssignOp) && $node->var instanceof Expr\ArrayDimFetch) {
+            $root = $node->var;
+            while ($root instanceof Expr\ArrayDimFetch) {
+                $root = $root->var;
+            }
+            if ($root instanceof Variable && is_string($root->name)) {
+                $facts = $this->expressionFacts($node->expr, $scope);
+                $facts['variables'][$root->name] = Cwe98Rule::getUnchangedInputProbability();
+
+                return [
+                    'kind' => 'assignment',
+                    'file' => $scope->getFile(),
+                    'scope' => $this->scopeName($scope),
+                    'offset' => $node->getEndTokenPos(),
+                    'startOffset' => $node->getStartTokenPos(),
+                    'variable' => $root->name,
+                    ...$facts,
+                ];
+            }
+        }
+
+        if (($node instanceof Assign || $node instanceof Concat
+                || ($node instanceof Expr\AssignOp\Plus && $scope->getType($node->var)->isArray()->yes()))
             && $node->var instanceof Variable
             && is_string($node->var->name)
         ) {
             $facts = $this->expressionFacts($node->expr, $scope);
-            if ($node instanceof Concat) {
+            if ($node instanceof Concat || $node instanceof Expr\AssignOp\Plus) {
                 $facts['variables'][$node->var->name] = Cwe98Rule::getUnchangedInputProbability();
             }
 
@@ -75,6 +170,30 @@ final class Cwe98Collector implements Collector
                 'variable' => $node->var->name,
                 ...$facts,
             ];
+        }
+
+        if ($node instanceof Expr\CallLike && !$node->isFirstClassCallable()) {
+            $assignments = [];
+            foreach ($node->getArgs() as $argument) {
+                if ($argument->value instanceof Variable && is_string($argument->value->name)
+                    && $scope->getType($argument->value)->isArray()->yes()
+                ) {
+                    $facts = $this->expressionFacts($node, $scope);
+                    $facts['unknown'] = true;
+                    $assignments[] = [
+                        'kind' => 'assignment',
+                        'file' => $scope->getFile(),
+                        'scope' => $this->scopeName($scope),
+                        'offset' => $node->getEndTokenPos(),
+                        'startOffset' => $node->getStartTokenPos(),
+                        'variable' => $argument->value->name,
+                        ...$facts,
+                    ];
+                }
+            }
+            if ($assignments !== []) {
+                return ['kind' => 'extraAssignments', 'file' => $scope->getFile(), 'scope' => $this->scopeName($scope), 'assignments' => $assignments];
+            }
         }
 
         if (!$node instanceof Include_) {
@@ -244,18 +363,18 @@ final class Cwe98Collector implements Collector
         return null;
     }
 
-    /**
-     * basename() and dirname() do not make a fixed path dynamic.
-     */
+    /** The result is fixed when all arguments are fixed. */
     private function isKnownPathFunction(Expr\CallLike $call, Scope $scope): bool
     {
-        if (!$call instanceof Expr\FuncCall || !$call->name instanceof Node\Name) {
+        if (!$call instanceof Expr\FuncCall || !$call->name instanceof Node\Name || $call->isFirstClassCallable()) {
             return false;
         }
 
         $function = $this->reflectionProvider->resolveFunctionName($call->name, $scope);
 
-        return $function !== null && in_array(strtolower($function), ['basename', 'dirname'], true);
+        return $function !== null && in_array(strtolower($function), [
+            'basename', 'dirname', 'base_path', 'app_path', 'resource_path', 'storage_path',
+        ], true);
     }
 
     /**

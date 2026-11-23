@@ -88,8 +88,16 @@ final class Cwe98Rule implements Rule
      */
     private function reportsForFile(string $file, array $events, CweFileReports $reports): void
     {
+        $expandedEvents = [];
+        foreach ($events as $event) {
+            if ($event !== null && $event['kind'] === 'extraAssignments') {
+                array_push($expandedEvents, ...$event['assignments']);
+            } else {
+                $expandedEvents[] = $event;
+            }
+        }
         $flowEvents = [];
-        foreach (ClosureScopeIsolation::isolate($events, static fn (array $sink): int => $sink['startOffset']) as [$event, $isolatedScope]) {
+        foreach (ClosureScopeIsolation::isolate($expandedEvents, static fn (array $sink): int => $sink['startOffset']) as [$event, $isolatedScope]) {
             $event['scope'] = $isolatedScope;
             $flowEvents[] = $event;
         }

@@ -137,6 +137,8 @@ CWE-78 ignore annotations must have a reason with at least two words.
 - It does not inspect request facades or custom input methods.
 - A different function called `request()` is not a request source.
 - An unrecognised source does not prove that a value is safe.
+- The include rule also checks route parameters in inline route closures.
+  See its rule document for the supported route declarations.
 - Each rule has more limitations. See its rule document.
 
 Full CWE explanations:
