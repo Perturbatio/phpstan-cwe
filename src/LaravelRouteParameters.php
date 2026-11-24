@@ -24,6 +24,7 @@ final class LaravelRouteParameters
             return [];
         }
 
+        // check if the method is one of the HTTP verbs or 'any' or 'match'
         $method = strtolower($call->name->toString());
         if (!in_array($method, ['get', 'post', 'put', 'patch', 'delete', 'options', 'any', 'match'], true)) {
             return [];
@@ -43,16 +44,16 @@ final class LaravelRouteParameters
                 $action = $argument->value;
             }
         }
+
         if (!$uri instanceof String_ || (!$action instanceof Expr\Closure && !$action instanceof Expr\ArrowFunction)) {
             return [];
         }
+
+        // find the names of the parameters in the route URI, ignoring any default values or optional parameters
         preg_match_all('/\{([a-zA-Z_][a-zA-Z0-9_]*)(?::[^}?]+)?\??\}/', $uri->value, $matches);
         $names = $matches[1];
-        if ($names === []) {
-            return [];
-        }
-
         $parameters = [];
+        // count the number of parameters remaining to match, so that we can stop looking once we've found them all
         $remaining = count($names);
         foreach ($action->params as $parameter) {
             if (!$parameter->var instanceof Expr\Variable || !is_string($parameter->var->name)) {
@@ -62,7 +63,7 @@ final class LaravelRouteParameters
             $isScalarParameter = !$parameter->type instanceof Name;
             if ($namedParameter || ($remaining > 0 && $isScalarParameter)) {
                 $parameters[] = ['variable' => $parameter->var->name, 'offset' => $parameter->getStartTokenPos()];
-                $remaining = max(0, $remaining - 1);
+                $remaining--;
             }
         }
 

@@ -11,10 +11,27 @@ use PHPStan\Reflection\ReflectionProvider;
 use PHPStan\Testing\PHPStanTestCase;
 use PHPStan\Type\MixedType;
 use PHPStan\Type\ObjectType;
+use PHPStan\Type\ArrayType;
+use PHPStan\Type\StringType;
 
 uses(PHPStanTestCase::class);
 
 covers(Cwe98Collector::class);
+
+class Cwe98NamedExpression extends Expr
+{
+    public string $name = 'files';
+
+    public function getSubNodeNames(): array
+    {
+        return [];
+    }
+
+    public function getType(): string
+    {
+        return 'Expr_Cwe98NamedExpression';
+    }
+}
 
 it('keeps the highest non-null request probability when merging facts', function (?int $left, ?int $right, ?int $expected): void {
     $collector = new Cwe98Collector($this->createStub(ReflectionProvider::class));
@@ -80,6 +97,7 @@ it('collects include filename facts for request sources and dynamic expressions'
     'dynamic variable' => ['$$name', [], null, true, []],
     'known function with fixed path' => ['dirname("home.php")', [], null, false, []],
     'upper case known function' => ['BASENAME("home.php")', [], null, false, []],
+    'Laravel resource path with fixed argument' => ['resource_path("home.php")', [], null, false, []],
     'unknown function with fixed path' => ['transform("home.php")', [], null, true, []],
     'dynamic function with fixed path' => ['$function("home.php")', [], null, true, []],
     'constructor with fixed argument' => ['new Example("home.php")', [], null, true, []],
@@ -148,14 +166,151 @@ it('records scope boundaries and assignment dependencies', function (bool $arrow
 
 it('marks a foreach array and its value as unknown when it uses a reference', function (): void {
     $scope = $this->createStub(Scope::class);
+    $scope->method('getFile')->willReturn('/tmp/include.php');
     $collector = new Cwe98Collector($this->createStub(ReflectionProvider::class));
     $nodes = (new ParserFactory())->createForHostVersion()->parse('<?php foreach ($files as &$file) {}');
     $event = $collector->processNode($nodes[0], $scope);
 
-    expect($event['kind'])->toBe('extraAssignments')
-        ->and(array_column($event['assignments'], 'variable'))->toBe(['files', 'file'])
-        ->and(array_column($event['assignments'], 'unknown'))->toBe([true, true])
-        ->and(array_column($event['assignments'], 'variables'))->toBe([['files' => 95], ['files' => 95]]);
+    $assignment = [
+        'kind' => 'assignment', 'file' => '/tmp/include.php', 'scope' => '::file',
+        'offset' => $nodes[0]->valueVar->getEndTokenPos(), 'startOffset' => $nodes[0]->getStartTokenPos(),
+        'variable' => 'file', 'sources' => [], 'requestProbability' => null,
+        'unknown' => true, 'variables' => ['files' => 95],
+    ];
+    expect($event)->toBe([
+        'kind' => 'extraAssignments', 'file' => '/tmp/include.php', 'scope' => '::file',
+        'assignments' => [[...$assignment, 'variable' => 'files'], $assignment],
+    ]);
+});
+
+it('records route parameter assignment events with their identity and location', function (): void {
+    $scope = $this->createStub(Scope::class);
+    $scope->method('getFile')->willReturn('/tmp/include.php');
+    $scope->method('resolveName')->willReturn('Illuminate\Support\Facades\Route');
+    $collector = new Cwe98Collector($this->createStub(ReflectionProvider::class));
+    $nodes = (new ParserFactory())->createForHostVersion()->parse(
+        '<?php Route::get("/{page}/{section}", function ($page, $section) {});',
+    );
+    $call = $nodes[0]->expr;
+    $parameters = $call->args[1]->value->params;
+    $assignments = [];
+    foreach (['page', 'section'] as $index => $name) {
+        $assignments[] = [
+            'kind' => 'assignment', 'file' => '/tmp/include.php', 'scope' => '::file',
+            'offset' => $parameters[$index]->getStartTokenPos(),
+            'startOffset' => $parameters[$index]->getStartTokenPos(),
+            'variable' => $name, 'sources' => ['laravel:route:' . $name],
+            'requestProbability' => 95, 'unknown' => false, 'variables' => [],
+        ];
+    }
+
+    expect($collector->processNode($call, $scope))->toBe([
+        'kind' => 'extraAssignments', 'file' => '/tmp/include.php', 'scope' => '::file',
+        'assignments' => $assignments,
+    ]);
+});
+
+it('records complete events for array changes', function (): void {
+    $scope = $this->createStub(Scope::class);
+    $scope->method('getFile')->willReturn('/tmp/include.php');
+    $scope->method('getType')->willReturn(new ArrayType(new MixedType(), new StringType()));
+    $provider = $this->createStub(ReflectionProvider::class);
+    $provider->method('resolveFunctionName')->willReturnCallback(static fn (Node\Name $name): string => $name->toString());
+    $collector = new Cwe98Collector($provider);
+    $nodes = (new ParserFactory())->createForHostVersion()->parse(
+        '<?php $alias = &$files; $files["x"] = $value; $files += $other; change($files); foreach ($files as $item) {}',
+    );
+    $base = ['kind' => 'assignment', 'file' => '/tmp/include.php', 'scope' => '::file'];
+    $reference = $nodes[0]->expr;
+    $referenceFacts = [
+        'offset' => $reference->getEndTokenPos(), 'startOffset' => $reference->getStartTokenPos(),
+    ];
+    $referenceSource = ['sources' => [], 'requestProbability' => null, 'unknown' => true, 'variables' => ['files' => 95]];
+    expect($collector->processNode($reference, $scope))->toBe([
+        'kind' => 'extraAssignments', 'file' => '/tmp/include.php', 'scope' => '::file',
+        'assignments' => [
+            [...$base, ...$referenceFacts, 'variable' => 'files', ...$referenceSource],
+            [...$base, ...$referenceFacts, 'variable' => 'alias', ...$referenceSource],
+        ],
+    ]);
+
+    $element = $nodes[1]->expr;
+    expect($collector->processNode($element, $scope))->toBe([
+        ...$base, 'offset' => $element->getEndTokenPos(), 'startOffset' => $element->getStartTokenPos(),
+        'variable' => 'files', 'sources' => [], 'requestProbability' => null,
+        'unknown' => false, 'variables' => ['value' => 95, 'files' => 95],
+    ]);
+    $union = $nodes[2]->expr;
+    expect($collector->processNode($union, $scope))->toBe([
+        ...$base, 'offset' => $union->getEndTokenPos(), 'startOffset' => $union->getStartTokenPos(),
+        'variable' => 'files', 'sources' => [], 'requestProbability' => null,
+        'unknown' => false, 'variables' => ['other' => 95, 'files' => 95],
+    ]);
+    $call = $nodes[3]->expr;
+    expect($collector->processNode($call, $scope))->toBe([
+        'kind' => 'extraAssignments', 'file' => '/tmp/include.php', 'scope' => '::file',
+        'assignments' => [[
+            ...$base, 'offset' => $call->getEndTokenPos(), 'startOffset' => $call->getStartTokenPos(),
+            'variable' => 'files', 'sources' => [], 'requestProbability' => null,
+            'unknown' => true, 'variables' => ['files' => 85],
+        ]],
+    ]);
+    $loop = $nodes[4];
+    expect($collector->processNode($loop, $scope))->toBe([
+        ...$base, 'offset' => $loop->valueVar->getEndTokenPos(), 'startOffset' => $loop->getStartTokenPos(),
+        'variable' => 'item', 'sources' => [], 'requestProbability' => null,
+        'unknown' => false, 'variables' => ['files' => 95],
+    ]);
+});
+
+it('rejects unsupported array and foreach targets', function (string $code): void {
+    $scope = $this->createStub(Scope::class);
+    $scope->method('getType')->willReturn(new ArrayType(new MixedType(), new StringType()));
+    $collector = new Cwe98Collector($this->createStub(ReflectionProvider::class));
+    $nodes = (new ParserFactory())->createForHostVersion()->parse('<?php ' . $code);
+    $node = $nodes[0] instanceof Node\Stmt\Expression ? $nodes[0]->expr : $nodes[0];
+
+    expect($collector->processNode($node, $scope))->toBeNull();
+})->with([
+    'foreach destructuring' => ['foreach ($files as [$item]) {}'],
+    'reference property target' => ['$object->files = &$files;'],
+    'reference property source' => ['$files = &$object->files;'],
+    'array property root' => ['$object->files["item"] = "fixed";'],
+    'dynamic array variable' => ['$$name["item"] = "fixed";'],
+    'call with property' => ['change($object->files);'],
+    'call with dynamic variable' => ['change($$name);'],
+    'assignment to property' => ['$object->file .= "fixed";'],
+]);
+
+it('does not treat other named expressions as variables', function (): void {
+    $scope = $this->createStub(Scope::class);
+    $scope->method('getType')->willReturn(new ArrayType(new MixedType(), new StringType()));
+    $collector = new Cwe98Collector($this->createStub(ReflectionProvider::class));
+    $namedExpression = new Cwe98NamedExpression();
+    $variable = new Expr\Variable('files');
+    $nodes = [
+        new Node\Stmt\Foreach_($namedExpression, new Expr\Variable('file'), ['byRef' => true]),
+        new Expr\AssignRef($namedExpression, $variable),
+        new Expr\AssignRef($variable, $namedExpression),
+        new Expr\Assign(new Expr\ArrayDimFetch($namedExpression), new Node\Scalar\String_('fixed')),
+        new Expr\FuncCall(new Node\Name('change'), [new Node\Arg($namedExpression)]),
+    ];
+
+    expect($collector->processNode($nodes[0], $scope)['kind'])->toBe('assignment');
+    foreach (array_slice($nodes, 1) as $node) {
+        expect($collector->processNode($node, $scope))->toBeNull();
+    }
+});
+
+it('keeps reference loops over non-variable expressions separate', function (): void {
+    $scope = $this->createStub(Scope::class);
+    $collector = new Cwe98Collector($this->createStub(ReflectionProvider::class));
+    $nodes = (new ParserFactory())->createForHostVersion()->parse('<?php foreach ($object->files as &$file) {}');
+    $event = $collector->processNode($nodes[0], $scope);
+
+    expect($event['kind'])->toBe('assignment')
+        ->and($event['variable'])->toBe('file')
+        ->and($event['unknown'])->toBeTrue();
 });
 
 it('does not collect unrelated nodes or unsupported assignment targets', function (): void {
