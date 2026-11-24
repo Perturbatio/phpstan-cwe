@@ -1,7 +1,7 @@
 # Package ignore annotations with fingerprints
 
-All rules in this package (CWE-78, CWE-79 in PHP and Blade, CWE-89, CWE-95, and
-CWE-306) support the `@phpstan-ignore` annotation. Use it to suppress one
+All rules in this package (CWE-78, CWE-79 in PHP and Blade, CWE-89, CWE-95,
+CWE-98, and CWE-306) support the `@phpstan-ignore` annotation. Use it to suppress one
 finding after you check that the code is safe.
 
 Put a dot between the rule identifier and the fingerprint. The package checks
@@ -16,7 +16,7 @@ shell_exec($command);
 ```
 
 - `cweNN` is the CWE number of the rule: `cwe78`, `cwe79`, `cwe89`, `cwe95`,
-  or `cwe306`.
+  `cwe98`, or `cwe306`.
 - `<fingerprint>` is the 64-character hash from the report tip. Copy it from
   the tip. A fingerprint is lower-case hexadecimal.
 - The reason in parentheses must have at least two words.
@@ -60,6 +60,7 @@ change it.
 | CWE-79 Blade | Normalised raw echo expression |
 | CWE-89 | Function or method name, sink expression, and the kind (direct or Laravel). Laravel findings also use the status of the value |
 | CWE-95 | Function or method name, closure position, `eval()` expression, input sources, and method calls that assign unknown values that reach `eval()` |
+| CWE-98 | Include expression, scope, request sources, and probability score |
 | CWE-306 | Route method and arguments (not the handler), handler, and critical operation |
 
 ## Limitations

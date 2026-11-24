@@ -4,7 +4,8 @@
 [CWE-78 command rule](Rules/Cwe78/Cwe78Rule.md), the
 [CWE-79 HTML rule](Rules/Cwe79/Cwe79Rule.md), the
 [CWE-89 database rule](Rules/Cwe89/Cwe89Rule.md), and the
-[CWE-89 Laravel SQL rule](Rules/Cwe89/Cwe89LaravelRule.md).
+[CWE-89 Laravel SQL rule](Rules/Cwe89/Cwe89LaravelRule.md), and the
+[CWE-98 include rule](Rules/Cwe98/Cwe98Rule.md).
 It checks input sources only. Each rule selects the command, output, or
 SQL expressions to check, applies its own protections, and creates reports.
 
@@ -116,6 +117,9 @@ score of 80.
 Both SQL rules use `phpstanCwe.cwe89` and high severity. Known request
 input gets a probability score of 80. The Laravel SQL rule also reports
 unknown dynamic sources with a score of 45.
+The include rule uses `phpstanCwe.cwe98` and high severity. It uses scores of
+95, 85, or 45 for known input, based on the change to the value. It gives an
+unknown dynamic filename a score of 60.
 Severity describes possible harm. Probability estimates confidence in
 the finding. It is not a measured probability of an attack.
 
@@ -127,12 +131,14 @@ CWE-78 ignore annotations must have a reason with at least two words.
 
 - The detector identifies sources in the current expression. It does not
   trace assignments or follow input across functions, branches, or loops.
-  The command, HTML, and Laravel SQL rules add simple local assignment tracking.
-  The direct database rule does not follow assigned values.
+  The command, HTML, Laravel SQL, and include rules add simple local assignment
+  tracking. The direct database rule does not follow assigned values.
 - It does not identify a request object from its variable name alone.
 - It does not inspect request facades or custom input methods.
 - A different function called `request()` is not a request source.
 - An unrecognised source does not prove that a value is safe.
+- The include rule also checks route parameters in inline route closures.
+  See its rule document for the supported route declarations.
 - Each rule has more limitations. See its rule document.
 
 Full CWE explanations:

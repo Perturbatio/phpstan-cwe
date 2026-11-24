@@ -40,6 +40,7 @@ function ignoreRuleCases(): array
         'CWE-79' => ['config' => 'config/cwe79.neon', 'cwe' => 79, 'prelude' => '', 'statement' => "echo \$_GET['name'];", 'changed' => "echo \$_POST['name'];", 'suffix' => ''],
         'CWE-89' => ['config' => 'config/cwe89.neon', 'cwe' => 89, 'prelude' => '', 'statement' => "mysqli_query(\$link, 'SELECT ' . \$_GET['id']);", 'changed' => "mysqli_query(\$link, 'SELECT ' . \$_POST['id']);", 'suffix' => ''],
         'CWE-95' => ['config' => 'config/cwe95.neon', 'cwe' => 95, 'prelude' => '', 'statement' => "eval(\$_GET['code']);", 'changed' => "eval(\$_POST['code']);", 'suffix' => ''],
+        'CWE-98' => ['config' => 'config/cwe98.neon', 'cwe' => 98, 'prelude' => '', 'statement' => "include \$_GET['page'];", 'changed' => "include \$_POST['page'];", 'suffix' => ''],
         'CWE-306' => [
             'config' => 'tests/fixtures/CWE-306/laravel.neon', 'cwe' => 306, 'prelude' => IGNORE_ROUTE_PRELUDE,
             'statement' => "Route::post('/erase', function (): void {\n        eraseAccounts();\n    });",

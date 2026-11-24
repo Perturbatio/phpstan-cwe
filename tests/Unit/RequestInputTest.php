@@ -42,6 +42,104 @@ it('finds request input in child nodes but not in numeric casts or node names', 
     'nested input' => [new Expr\BinaryOp\Concat(new Variable('value'), new Variable('_POST')), true],
 ]);
 
+it('finds request input in include filenames without treating numeric casts as protection', function (
+    string $expression,
+    bool $hasInput,
+    array $expectedVariables = [],
+): void {
+    $nodes = (new ParserFactory())->createForHostVersion()->parse('<?php ' . $expression . ';');
+    $variables = [];
+    $scope = $this->createStub(Scope::class);
+    $provider = $this->createStub(ReflectionProvider::class);
+    $provider->method('resolveFunctionName')->willReturnCallback(
+        static fn (Name $name): string => $name->toString(),
+    );
+
+    expect(RequestInput::inInclude(
+        $nodes[0]->expr,
+        $scope,
+        $provider,
+        static function (string $variable) use (&$variables): bool {
+            $variables[] = $variable;
+
+            return false;
+        },
+    ))->toBe($hasInput)
+        ->and($variables)->toBe($expectedVariables);
+})->with([
+    'GET input' => ["\$_GET['page']", true],
+    'nested GET input does not inspect index' => ['$_GET["pages"][$index]', true],
+    'nested POST input does not inspect index' => ['$_POST["pages"][$index]', true],
+    'nested cookie input does not inspect index' => ['$_COOKIE["pages"][$index]', true],
+    'nested request input does not inspect index' => ['$_REQUEST["pages"][$index]', true],
+    'POST input in basename' => ["basename(\$_POST['page'])", true],
+    'cookie input after numeric cast' => ['(int) $_COOKIE["id"]', true],
+    'request helper' => ["request('page')", true],
+    'assigned input dependency' => ['$page', false, ['page']],
+    'mixed source and dependency' => ["\$_GET['page'] . \$prefix", true, ['prefix']],
+    'match selector does not supply the filename' => [
+        "match (\$_GET['page']) { 'help' => __DIR__ . '/help.php', default => __DIR__ . '/home.php' }",
+        false,
+    ],
+    'match result supplies the filename' => [
+        "match (\$page) { 'help' => \$_GET['page'], default => __DIR__ . '/home.php' }",
+        true,
+    ],
+    'ternary condition selects between fixed paths' => [
+        "\$_GET['page'] === 'help' ? __DIR__ . '/help.php' : __DIR__ . '/home.php'",
+        false,
+    ],
+    'ternary result supplies the filename' => [
+        "\$page === 'help' ? \$_GET['page'] : __DIR__ . '/home.php'",
+        true,
+    ],
+    'shorthand ternary can return its condition' => [
+        "\$page ?: \$_GET['page']",
+        true,
+        ['page'],
+    ],
+    'nested match in shorthand condition selects fixed paths' => [
+        '(match ($_GET["selector"]) { default => "fixed.php" }) ?: "fallback.php"',
+        false,
+    ],
+    'nested match in shorthand fallback selects fixed paths' => [
+        '"fixed.php" ?: (match ($_GET["selector"]) { default => "fallback.php" })',
+        false,
+    ],
+    'nested match in ternary result selects fixed paths' => [
+        'true ? (match ($_GET["selector"]) { default => "fixed.php" }) : "fallback.php"',
+        false,
+    ],
+    'nested match in ternary fallback selects fixed paths' => [
+        'true ? "fixed.php" : (match ($_GET["selector"]) { default => "fallback.php" })',
+        false,
+    ],
+    'nested match in match result selects fixed paths' => [
+        'match (true) { default => match ($_GET["selector"]) { default => "fixed.php" } }',
+        false,
+    ],
+    'nested match result supplies request input' => [
+        'match (true) { default => match ($_GET["selector"]) { default => $_POST["page"] } }',
+        true,
+    ],
+    'uncalled arrow body is not a filename source' => ['fn () => $_GET["page"]', false],
+]);
+
+it('checks selectors for request input in HTML and SQL expressions', function (string $expression, bool $hasInput): void {
+    $nodes = (new ParserFactory())->createForHostVersion()->parse('<?php ' . $expression . ';');
+    $scope = $this->createStub(Scope::class);
+    $provider = $this->createStub(ReflectionProvider::class);
+
+    expect(RequestInput::inHtml($nodes[0]->expr, $scope, $provider))->toBe($hasInput)
+        ->and(RequestInput::inSql($nodes[0]->expr))->toBe($hasInput)
+        ->and(RequestInput::inSql($nodes[0]->expr, $scope, $provider))->toBe($hasInput);
+})->with([
+    'request in ternary selector' => ['$_GET["selector"] ? "first" : "second"', true],
+    'request in match selector' => ['match ($_POST["selector"]) { default => "fixed" }', true],
+    'request in match case' => ['match ("fixed") { $_COOKIE["case"] => "first", default => "second" }', true],
+    'fixed selectors and results' => ['match ("fixed") { "first" => "first", default => "second" }', false],
+]);
+
 it('accepts only recognised default HTML escape calls', function (
     Name|Expr $name,
     array $arguments,

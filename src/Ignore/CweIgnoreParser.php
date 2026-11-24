@@ -51,7 +51,7 @@ final class CweIgnoreParser implements Parser
                 $remaining = array_values(array_filter(
                     $ignoreAnnotations,
                     static fn (string|array $ignore): bool => preg_match(
-                        '/\AphpstanCwe\.cwe(?:78|79|89|95|306)\.[a-z0-9.]+\z/i',
+                        '/\AphpstanCwe\.cwe(?:78|79|89|95|98|306)\.[a-z0-9.]+\z/i',
                         is_string($ignore) ? $ignore : $ignore['name'],
                     ) !== 1,
                 ));

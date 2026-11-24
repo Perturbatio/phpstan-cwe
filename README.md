@@ -80,17 +80,21 @@ includes:
 
 Rule configuration files are grouped as follows:
 
-| Path | Purpose |
-|------|---------|
-| `extension.neon` | Main entry point. Enables all rules. |
-| `config/cwe*.neon` | Public entry points for individual rules. |
-| `config/parameters.neon` | Shared defaults and parameter schema. |
-| `config/rules/` | Internal rule and collector service definitions. |
+| Path                     | Purpose                                          |
+|--------------------------|--------------------------------------------------|
+| `extension.neon`         | Main entry point. Enables all rules.             |
+| `config/cwe*.neon`       | Public entry points for individual rules.        |
+| `config/parameters.neon` | Shared defaults and parameter schema.            |
+| `config/rules/`          | Internal rule and collector service definitions. |
 
 Use `config/cwe95.neon` to check PHP evaluation of PHP code including user provided input. Use
 `config/cwe95-laravel.neon` to also check Laravel request input. See the
 [CWE-95 rule document](src/Rules/Cwe95/Cwe95Rule.md) for ratings, limitations,
 and fingerprint-based ignore annotations.
+
+Use `config/cwe98.neon` to check dynamic PHP include and require filenames.
+See the [CWE-98 rule document](src/Rules/Cwe98/Cwe98Rule.md) for ratings and
+limitations.
 
 If your project does not use Laravel, select the rules you need instead of
 including the full extension.
@@ -103,6 +107,7 @@ including the full extension.
 You cannot exclude a specific rule once loaded, so PHPStan still processes it. You can suppress the errors it produces.
 
 In this case, add the following to your `phpstan.neon`
+
 ```neon
 parameters:
     ignoreErrors:
@@ -143,7 +148,17 @@ See the [shared ignore-annotation guide](src/Ignore/CweIgnore.md).
 An ignore annotation with no matching raw echo gets a report. See the
 [Blade rule document](src/Rules/Cwe79/Cwe79BladeRule.md) for the exact placement.
 
+[More Information](docs/more-information.md)
 
-[More Information](docs/further-reading.md)
+Current rules implemented:
+
+| CWE     | Description                                    |
+|---------|------------------------------------------------|
+| CWE-78  | Command injection                              |
+| CWE-79  | Cross-site scripting (XSS)                     |
+| CWE-89  | SQL injection                                  |
+| CWE-95  | PHP evaluation of user input                   |
+| CWE-98  | Dynamic include/require filename               |
+| CWE-306 | Missing authentication for critical operations |
 
 Development of this package was made possible thanks to [LiberEat](https://libereat.com/)

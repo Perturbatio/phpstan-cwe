@@ -1,0 +1,7 @@
+includes:
+    - ../../../extension.neon
+
+parameters:
+    phpstanCwe:
+        cwe306CriticalOperations:
+            - App\Actions\Cwe98Integration::__invoke
